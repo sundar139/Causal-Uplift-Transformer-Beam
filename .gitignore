@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual envs
+.venv/
+
+# Environment
+.env
+
+# Build artifacts
+dist/
+build/
+
+# MLflow outputs
+mlruns/
+
+# Keep directory structure, ignore generated files
+artifacts/*
+!artifacts/.gitkeep
+models/*
+!models/.gitkeep
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
