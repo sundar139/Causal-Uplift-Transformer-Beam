@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "causal-uplift-transformer-beam"
+version = "0.1.0"
+description = "Production-grade causal uplift repository foundation with baseline smoke pipeline."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115.0",
+    "joblib>=1.4.2",
+    "matplotlib>=3.8.0",
+    "mlflow>=2.16.0",
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "pydantic>=2.8.0",
+    "python-dotenv>=1.0.1",
+    "requests>=2.32.0",
+    "scikit-learn>=1.5.0",
+    "scikit-uplift>=0.5.1",
+    "uvicorn[standard]>=0.30.0"
+]
+
+[dependency-groups]
+dev = [
+    "black>=24.8.0",
+    "mypy>=1.11.0",
+    "pytest>=8.3.0",
+    "ruff>=0.6.0"
+]
+
+[project.scripts]
+uplift-train = "causal_uplift.train:main"
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = []
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+strict = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
