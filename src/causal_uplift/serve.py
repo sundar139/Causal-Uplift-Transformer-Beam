@@ -1,19 +1,35 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import joblib
 import pandas as pd
 from fastapi import FastAPI
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 from causal_uplift.baselines import TwoModelUpliftBaseline
 from causal_uplift.config import AppConfig
 
-app = FastAPI(title="Causal Uplift Smoke API", version="0.1.0")
-
 MODEL: TwoModelUpliftBaseline | None = None
 MODEL_LOADED = False
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    global MODEL, MODEL_LOADED
+    config = AppConfig.from_env()
+    model_path = Path(config.model_dir) / "smoke_uplift_baseline.joblib"
+    if model_path.exists():
+        MODEL = joblib.load(model_path)
+        MODEL_LOADED = True
+    else:
+        MODEL = None
+        MODEL_LOADED = False
+    yield
+
+
+app = FastAPI(title="Causal Uplift Smoke API", version="0.1.0", lifespan=lifespan)
 
 
 class FeatureRow(BaseModel):
@@ -21,7 +37,10 @@ class FeatureRow(BaseModel):
 
 
 class PredictRequest(BaseModel):
-    rows: list[FeatureRow]
+    rows: list[FeatureRow] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("rows", "records"),
+    )
 
 
 class PredictItem(BaseModel):
@@ -34,19 +53,6 @@ class PredictItem(BaseModel):
 class PredictResponse(BaseModel):
     model_loaded: bool
     predictions: list[PredictItem]
-
-
-@app.on_event("startup")
-def load_model() -> None:
-    global MODEL, MODEL_LOADED
-    config = AppConfig.from_env()
-    model_path = Path(config.model_dir) / "smoke_uplift_baseline.joblib"
-    if model_path.exists():
-        MODEL = joblib.load(model_path)
-        MODEL_LOADED = True
-    else:
-        MODEL = None
-        MODEL_LOADED = False
 
 
 @app.get("/health")

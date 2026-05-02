@@ -16,10 +16,14 @@ dependencies = [
     "numpy>=1.26.0",
     "pandas>=2.2.0",
     "pydantic>=2.8.0",
+    "pyyaml>=6.0.3",
     "python-dotenv>=1.0.1",
     "requests>=2.32.0",
     "scikit-learn>=1.5.0",
     "scikit-uplift>=0.5.1",
+    "torch>=2.8.0",
+    "torchvision>=0.23.0",
+    "tqdm>=4.67.3",
     "uvicorn[standard]>=0.30.0"
 ]
 
@@ -37,6 +41,15 @@ uplift-train = "causal_uplift.train:main"
 
 [tool.uv]
 package = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+torchvision = [{ index = "pytorch-cu128" }]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
