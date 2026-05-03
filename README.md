@@ -61,6 +61,42 @@ Primary outputs:
 - artifacts/evaluation/full_training_metrics.json
 - artifacts/evaluation/test_predictions.csv
 
+## Data
+
+Dataset used:
+
+- Criteo Uplift Prediction via `sklift.datasets.fetch_criteo(percent10=True)`
+
+Why `data/raw` and `data/processed` may be empty initially:
+
+- The dataset is downloaded/materialized locally on demand.
+- Raw and processed parquet files are git-ignored to keep the repository lightweight.
+
+Materialize local parquet data:
+
+```bash
+uv run python -m causal_uplift.data materialize --config configs/training.yaml
+```
+
+Generate data lineage/profile artifacts:
+
+```bash
+uv run python -m causal_uplift.data profile --config configs/training.yaml
+```
+
+Ignored local data files:
+
+- data/raw/*.parquet
+- data/processed/*.parquet
+
+Tracked lightweight data artifacts:
+
+- artifacts/data/criteo_data_profile.json
+- artifacts/data/criteo_schema.json
+- artifacts/data/criteo_sample_preview.csv
+- artifacts/data/data_manifest.json
+- docs/data_card.md
+
 ## Reporting artifacts
 
 Generate consolidated report and plot artifacts from the latest full run:
@@ -127,6 +163,8 @@ uv run python scripts/verify_environment.py
 uv run ruff check src tests
 uv run black --check src tests
 uv run pytest
+uv run python -m causal_uplift.data materialize --config configs/training.yaml
+uv run python -m causal_uplift.data profile --config configs/training.yaml
 uv run python -m causal_uplift.train smoke --sample-size 10000
 uv run python -m causal_uplift.train full --config configs/training.yaml
 uv run python -m causal_uplift.train report --config configs/training.yaml

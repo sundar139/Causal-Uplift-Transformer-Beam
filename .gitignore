@@ -36,6 +36,11 @@ artifacts/reports/*
 artifacts/plots/*
 !artifacts/plots/.gitkeep
 !artifacts/plots/*.png
+!artifacts/data/
+artifacts/data/*
+!artifacts/data/.gitkeep
+!artifacts/data/*.json
+!artifacts/data/*.csv
 models/*
 !models/.gitkeep
 data/raw/*

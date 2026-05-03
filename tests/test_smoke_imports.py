@@ -8,6 +8,7 @@ from causal_uplift.config import AppConfig
 def test_smoke_imports() -> None:
     import causal_uplift.baselines  # noqa: F401
     import causal_uplift.data  # noqa: F401
+    import causal_uplift.data_profile  # noqa: F401
     import causal_uplift.evaluate  # noqa: F401
     import causal_uplift.mlflow_utils  # noqa: F401
     import causal_uplift.plots  # noqa: F401
