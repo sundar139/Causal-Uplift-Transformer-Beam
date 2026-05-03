@@ -1,16 +1,5 @@
 [
   {
-    "model_name":"ft_transformer",
-    "treatment_response_auc":0.9561392354,
-    "qini_auc":0.1872075653,
-    "uplift_auc":0.0060600803,
-    "policy_gain_top10":0.0082373878,
-    "policy_gain_top20":0.0049073215,
-    "policy_gain_top30":0.0035085277,
-    "mean_predicted_uplift":0.0007688407,
-    "positive_uplift_rate":0.9999610146
-  },
-  {
     "model_name":"s_learner_logistic",
     "treatment_response_auc":0.9501663788,
     "qini_auc":0.1865987463,
@@ -20,6 +9,17 @@
     "policy_gain_top30":0.0034617015,
     "mean_predicted_uplift":0.0011818971,
     "positive_uplift_rate":1.0
+  },
+  {
+    "model_name":"ft_transformer",
+    "treatment_response_auc":0.9557699764,
+    "qini_auc":0.1861821782,
+    "uplift_auc":0.0060237316,
+    "policy_gain_top10":0.0085693737,
+    "policy_gain_top20":0.0048292404,
+    "policy_gain_top30":0.0035060913,
+    "mean_predicted_uplift":0.0007065297,
+    "positive_uplift_rate":0.9999982117
   },
   {
     "model_name":"two_model_logistic",

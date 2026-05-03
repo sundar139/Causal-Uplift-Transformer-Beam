@@ -34,7 +34,7 @@
     "test": 0.8499999463503771
   },
   "random_state": 42,
-  "generated_at_utc": "2026-05-03T04:29:20.860911+00:00",
+  "generated_at_utc": "2026-05-03T06:17:52.752116+00:00",
   "local_raw_path": "data\\raw\\criteo_full.parquet",
   "local_processed_paths": {
     "train": "data\\processed\\full\\train.parquet",
