@@ -37,13 +37,21 @@ def log_artifacts(artifact_paths: list[Path], artifact_path: str | None = None) 
         mlflow.log_artifact(str(artifact), artifact_path=artifact_path)
 
 
+def _stringify_param(value: object) -> int | float | str:
+    if isinstance(value, int | float | str):
+        return value
+    if value is None:
+        return "None"
+    return str(value)
+
+
 def log_run_payload(
-    params: dict[str, int | float | str],
+    params: dict[str, object],
     metrics: dict[str, float],
     artifact_paths: list[Path],
 ) -> None:
     if params:
-        mlflow.log_params(params)
+        mlflow.log_params({key: _stringify_param(value) for key, value in params.items()})
     if metrics:
         mlflow.log_metrics(metrics)
     if artifact_paths:

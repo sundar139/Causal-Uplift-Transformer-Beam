@@ -1,0 +1,31 @@
+random_state: 42
+dataset_variant: full
+
+data:
+  sample_size: 0
+  percent10: false
+  test_size: 0.2
+  validation_size: 0.2
+  target_col: conversion
+  treatment_col: treatment
+
+study:
+  study_name: uplift-full-tuning
+  storage: sqlite:///optuna_studies.db
+  direction: maximize
+  n_trials_transformer: 8
+  n_trials_s_learner: 8
+  timeout_seconds: null
+  primary_metric: qini_auc
+  tie_breaker_metric: policy_gain_top20
+
+training:
+  max_epochs: 8
+  early_stopping_patience: 2
+  num_workers: 0
+
+artifacts:
+  tuning_dir: artifacts/tuning/full
+  best_params_name: best_params.json
+  trials_name: optuna_trials.csv
+  summary_name: tuning_summary.json

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
@@ -105,11 +106,14 @@ def _train_baseline_model(
     y_train: pd.Series,
     t_train: pd.Series,
     X_test: pd.DataFrame,
+    random_state: int = 42,
+    model_params: dict[str, Any] | None = None,
 ) -> tuple[object, UpliftPrediction]:
+    params = model_params or {}
     model_registry: dict[str, object] = {
-        "two_model_logistic": TwoModelUpliftBaseline(),
-        "s_learner_logistic": SLearnerBaseline(),
-        "t_learner_logistic": TLearnerBaseline(),
+        "two_model_logistic": TwoModelUpliftBaseline(random_state=random_state),
+        "s_learner_logistic": SLearnerBaseline(random_state=random_state, **params),
+        "t_learner_logistic": TLearnerBaseline(random_state=random_state),
     }
     model = model_registry[model_name]
     model.fit(X_train, y_train, t_train)
@@ -153,6 +157,27 @@ def resolve_training_output_paths(
     }
 
 
+def resolve_best_params_path(training_config: TrainingConfig, artifact_root: Path) -> Path:
+    variant = dataset_variant_from_config(training_config)
+    return artifact_root / "tuning" / variant / "best_params.json"
+
+
+def load_best_params_for_training(
+    training_config: TrainingConfig,
+    artifact_root: Path,
+) -> dict[str, Any]:
+    best_params_path = resolve_best_params_path(training_config, artifact_root)
+    if not best_params_path.exists():
+        raise FileNotFoundError(
+            f"--use-best-params was requested, but no tuning artifact exists at "
+            f"{best_params_path}. Run `uv run python -m causal_uplift.tuning --config "
+            f"configs/tuning{'_full' if not training_config.data.percent10 else ''}.yaml` first."
+        )
+    with best_params_path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return dict(payload.get("models", {}))
+
+
 def _dataset_mlflow_tags(
     training_config: TrainingConfig,
     row_count_train: int,
@@ -169,10 +194,13 @@ def _dataset_mlflow_tags(
     }
 
 
-def run_full_training(config_path: str | Path) -> dict[str, object]:
+def run_full_training(config_path: str | Path, use_best_params: bool = False) -> dict[str, object]:
     app_config = AppConfig.from_env()
     training_config: TrainingConfig = load_training_config(config_path)
     initialize_mlflow(app_config)
+    tuned_model_params: dict[str, Any] = {}
+    if use_best_params:
+        tuned_model_params = load_best_params_for_training(training_config, app_config.artifact_dir)
 
     dataset = load_criteo_dataset(
         sample_size=training_config.data.sample_size,
@@ -216,21 +244,48 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
 
     for model_name in training_config.models:
         if model_name == "ft_transformer":
+            transformer_params = tuned_model_params.get("ft_transformer", {}).get("best_params", {})
+            embedding_dim = int(
+                transformer_params.get(
+                    "embedding_dim",
+                    training_config.transformer.embedding_dim,
+                )
+            )
+            num_layers = int(
+                transformer_params.get("num_layers", training_config.transformer.num_layers)
+            )
+            num_heads = int(
+                transformer_params.get("num_heads", training_config.transformer.num_heads)
+            )
+            dropout = float(transformer_params.get("dropout", training_config.transformer.dropout))
+            hidden_dim = int(
+                transformer_params.get("hidden_dim", training_config.transformer.hidden_dim)
+            )
+            learning_rate = float(
+                transformer_params.get("learning_rate", training_config.training.learning_rate)
+            )
+            weight_decay = float(
+                transformer_params.get("weight_decay", training_config.training.weight_decay)
+            )
+            batch_size = int(
+                transformer_params.get("batch_size", training_config.training.batch_size)
+            )
             transformer_model = FTTransformerUpliftModel(
                 num_features=X_train_np.shape[1] + 1,
-                d_token=training_config.transformer.embedding_dim,
-                num_layers=training_config.transformer.num_layers,
-                num_heads=training_config.transformer.num_heads,
-                dropout=training_config.transformer.dropout,
-                hidden_dim=training_config.transformer.hidden_dim,
+                d_token=embedding_dim,
+                num_layers=num_layers,
+                num_heads=num_heads,
+                dropout=dropout,
+                hidden_dim=hidden_dim,
             )
             trainer = TorchUpliftTrainer(
                 model=transformer_model,
-                learning_rate=training_config.training.learning_rate,
-                weight_decay=training_config.training.weight_decay,
-                batch_size=training_config.training.batch_size,
+                learning_rate=learning_rate,
+                weight_decay=weight_decay,
+                batch_size=batch_size,
                 epochs=training_config.training.max_epochs,
                 patience=training_config.training.early_stopping_patience,
+                num_workers=training_config.training.num_workers,
                 random_state=training_config.random_state,
             )
 
@@ -253,27 +308,34 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
             )
             prediction = trainer.predict_uplift(X_test_np)
             model_kind = "transformer"
-            run_params: dict[str, int | float | str] = {
+            run_params: dict[str, object] = {
                 "sample_size": training_config.data.sample_size,
                 "random_state": training_config.random_state,
-                "embedding_dim": training_config.transformer.embedding_dim,
-                "num_layers": training_config.transformer.num_layers,
-                "num_heads": training_config.transformer.num_heads,
-                "dropout": training_config.transformer.dropout,
-                "hidden_dim": training_config.transformer.hidden_dim,
-                "learning_rate": training_config.training.learning_rate,
-                "weight_decay": training_config.training.weight_decay,
-                "batch_size": training_config.training.batch_size,
+                "embedding_dim": embedding_dim,
+                "num_layers": num_layers,
+                "num_heads": num_heads,
+                "dropout": dropout,
+                "hidden_dim": hidden_dim,
+                "learning_rate": learning_rate,
+                "weight_decay": weight_decay,
+                "batch_size": batch_size,
                 "max_epochs": training_config.training.max_epochs,
                 "early_stopping_patience": training_config.training.early_stopping_patience,
             }
         else:
+            baseline_params = (
+                tuned_model_params.get("s_learner_logistic", {}).get("best_params", {})
+                if model_name == "s_learner_logistic"
+                else {}
+            )
             trained_model, prediction = _train_baseline_model(
                 model_name=model_name,
                 X_train=X_train_df,
                 y_train=y_train,
                 t_train=t_train,
                 X_test=X_test_df,
+                random_state=training_config.random_state,
+                model_params=baseline_params,
             )
             model_path = Path(app_config.model_dir) / f"{model_name}.joblib"
             joblib.dump(trained_model, model_path)
@@ -282,6 +344,7 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
                 "sample_size": training_config.data.sample_size,
                 "random_state": training_config.random_state,
                 "model": model_name,
+                **baseline_params,
             }
 
         metrics = compute_uplift_metrics(
@@ -314,6 +377,7 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
             tags={
                 "pipeline": "full",
                 "model_kind": model_kind,
+                "tuned_params": str(use_best_params).lower(),
                 **dataset_tags,
             },
         ):
@@ -478,6 +542,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="configs/training.yaml",
         help="Path to full training configuration",
     )
+    full_parser.add_argument(
+        "--use-best-params",
+        action="store_true",
+        help="Use variant-specific Optuna best_params.json for supported models",
+    )
 
     report_parser = subparsers.add_parser(
         "report",
@@ -502,7 +571,7 @@ def main() -> None:
         return
 
     if args.command == "full":
-        run_full_training(config_path=args.config)
+        run_full_training(config_path=args.config, use_best_params=args.use_best_params)
         return
 
     if args.command == "report":

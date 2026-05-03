@@ -83,7 +83,7 @@ def _save_plot(
         plt.plot(x, y_values, label=str(model_name))
 
     if has_any:
-        plt.legend()
+        plt.legend(loc="upper left")
 
     plt.title(title)
     plt.xlabel("Population fraction targeted")

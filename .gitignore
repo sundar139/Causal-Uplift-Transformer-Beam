@@ -20,6 +20,10 @@ build/
 
 # MLflow outputs
 mlruns/
+mlflow.db
+mlflow.db-*
+optuna_studies.db
+optuna_studies.db-*
 
 # Preserve report and plot artifacts
 mlartifacts/
@@ -42,12 +46,15 @@ artifacts/data/*
 !artifacts/data/**/
 !artifacts/data/**/*.json
 !artifacts/data/**/*.csv
+!artifacts/tuning/
+artifacts/tuning/*
+artifacts/tuning/**
+!artifacts/tuning/**/
+!artifacts/tuning/**/*.json
+!artifacts/tuning/**/*.csv
 models/*
 !models/.gitkeep
 data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
-
-mlflow.db
-mlflow.db-*

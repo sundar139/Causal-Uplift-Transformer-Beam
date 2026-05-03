@@ -61,6 +61,37 @@ Primary outputs:
 - artifacts/evaluation/percent10/full_training_metrics.json
 - artifacts/evaluation/percent10/test_predictions.csv
 
+## Optuna tuning
+
+Run Optuna after the percent10 and full dataset workflows are validated. That keeps tuning focused on improving known-good model paths instead of debugging data loading, splitting, or reporting while trials are running.
+
+Tune percent10:
+
+```bash
+uv run python -m causal_uplift.tuning --config configs/tuning.yaml
+uv run python -m causal_uplift.train full --config configs/training.yaml --use-best-params
+uv run python -m causal_uplift.train report --config configs/training.yaml
+```
+
+Tune full:
+
+```bash
+uv run python -m causal_uplift.tuning --config configs/tuning_full.yaml
+uv run python -m causal_uplift.train full --config configs/training_full.yaml --use-best-params
+uv run python -m causal_uplift.train report --config configs/training_full.yaml
+```
+
+Tuning artifacts:
+
+- artifacts/tuning/percent10/optuna_trials.csv
+- artifacts/tuning/percent10/best_params.json
+- artifacts/tuning/percent10/tuning_summary.json
+- artifacts/tuning/full/optuna_trials.csv
+- artifacts/tuning/full/best_params.json
+- artifacts/tuning/full/tuning_summary.json
+
+Optuna uses local SQLite storage by default at `optuna_studies.db`; MLflow remains SQLite-backed at `mlflow.db`.
+
 ## Dataset modes
 
 This project supports two dataset modes with separate local parquet, profile, and evaluation paths:
@@ -158,7 +189,7 @@ Current model ranking (example):
 ## MLflow UI
 
 ```bash
-uv run mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
+uv run python -m mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
 ```
 
 Open <http://127.0.0.1:5000>.
@@ -200,7 +231,11 @@ uv run python -m causal_uplift.data materialize --config configs/training_full.y
 uv run python -m causal_uplift.data profile --config configs/training_full.yaml
 uv run python -m causal_uplift.train smoke --sample-size 10000
 uv run python -m causal_uplift.train full --config configs/training.yaml
+uv run python -m causal_uplift.tuning --config configs/tuning.yaml
+uv run python -m causal_uplift.train full --config configs/training.yaml --use-best-params
 uv run python -m causal_uplift.train report --config configs/training.yaml
 uv run python -m causal_uplift.train full --config configs/training_full.yaml
+uv run python -m causal_uplift.tuning --config configs/tuning_full.yaml
+uv run python -m causal_uplift.train full --config configs/training_full.yaml --use-best-params
 uv run python -m causal_uplift.train report --config configs/training_full.yaml
 ```

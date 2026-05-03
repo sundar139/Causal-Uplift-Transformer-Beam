@@ -68,6 +68,7 @@ class TorchUpliftTrainer:
         batch_size: int = 1024,
         epochs: int = 6,
         patience: int = 2,
+        num_workers: int = 0,
         random_state: int = 42,
     ) -> None:
         self.model = model
@@ -76,6 +77,7 @@ class TorchUpliftTrainer:
         self.batch_size = batch_size
         self.epochs = epochs
         self.patience = patience
+        self.num_workers = num_workers
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         random.seed(random_state)
@@ -109,9 +111,17 @@ class TorchUpliftTrainer:
             torch.from_numpy(y_validation.astype(np.float32)),
         )
 
-        train_loader = DataLoader(train_dataset, batch_size=self.batch_size, shuffle=True)
+        train_loader = DataLoader(
+            train_dataset,
+            batch_size=self.batch_size,
+            shuffle=True,
+            num_workers=self.num_workers,
+        )
         validation_loader = DataLoader(
-            validation_dataset, batch_size=self.batch_size, shuffle=False
+            validation_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
         )
 
         best_val_loss = float("inf")
@@ -163,7 +173,12 @@ class TorchUpliftTrainer:
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         self.model.eval()
         dataset = TensorDataset(torch.from_numpy(X.astype(np.float32)))
-        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
+        loader = DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            num_workers=self.num_workers,
+        )
         chunks: list[np.ndarray] = []
 
         with torch.no_grad():

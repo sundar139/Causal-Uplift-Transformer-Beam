@@ -16,13 +16,29 @@ class UpliftPrediction:
     uplift: np.ndarray
 
 
-def _build_logistic_pipeline(random_state: int) -> Pipeline:
+def _build_logistic_pipeline(
+    random_state: int,
+    *,
+    c_value: float = 1.0,
+    penalty: str = "l2",
+    class_weight: str | None = None,
+    max_iter: int = 500,
+) -> Pipeline:
+    classifier_kwargs: dict[str, object] = {
+        "C": c_value,
+        "class_weight": class_weight,
+        "max_iter": max_iter,
+        "random_state": random_state,
+    }
+    if penalty != "l2":
+        classifier_kwargs["penalty"] = penalty
+
     return Pipeline(
         [
             ("scaler", StandardScaler()),
             (
                 "classifier",
-                LogisticRegression(max_iter=500, random_state=random_state),
+                LogisticRegression(**classifier_kwargs),
             ),
         ]
     )
@@ -59,9 +75,26 @@ class TwoModelUpliftBaseline:
 
 
 class SLearnerBaseline:
-    def __init__(self, random_state: int = 42) -> None:
+    def __init__(
+        self,
+        random_state: int = 42,
+        C: float = 1.0,
+        penalty: str = "l2",
+        class_weight: str | None = None,
+        max_iter: int = 500,
+    ) -> None:
         self.random_state = random_state
-        self.model: Pipeline = _build_logistic_pipeline(random_state)
+        self.C = C
+        self.penalty = penalty
+        self.class_weight = class_weight
+        self.max_iter = max_iter
+        self.model: Pipeline = _build_logistic_pipeline(
+            random_state,
+            c_value=C,
+            penalty=penalty,
+            class_weight=class_weight,
+            max_iter=max_iter,
+        )
         self.feature_columns: list[str] = []
 
     def fit(self, X: pd.DataFrame, y: pd.Series, treatment: pd.Series) -> SLearnerBaseline:

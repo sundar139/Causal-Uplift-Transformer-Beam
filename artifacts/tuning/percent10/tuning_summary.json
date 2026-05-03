@@ -1,0 +1,20 @@
+{
+  "dataset_variant": "percent10",
+  "study_names": {
+    "ft_transformer": "uplift-percent10-tuning-ft-transformer",
+    "s_learner_logistic": "uplift-percent10-tuning-s-learner-logistic"
+  },
+  "n_trials_requested": {
+    "ft_transformer": 20,
+    "s_learner_logistic": 20
+  },
+  "n_trials_completed": {
+    "ft_transformer": 20,
+    "s_learner_logistic": 20
+  },
+  "best_model_family": "ft_transformer",
+  "best_qini_auc": 0.21135623579336912,
+  "best_params_path": "artifacts\\tuning\\percent10\\best_params.json",
+  "trials_path": "artifacts\\tuning\\percent10\\optuna_trials.csv",
+  "generated_at_utc": "2026-05-03T08:08:33.144151+00:00"
+}
