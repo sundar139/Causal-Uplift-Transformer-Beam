@@ -17,6 +17,7 @@ from causal_uplift.baselines import (
 from causal_uplift.config import AppConfig, TrainingConfig, load_training_config
 from causal_uplift.data import (
     create_train_validation_test_split,
+    dataset_variant_from_config,
     load_criteo_dataset,
     load_criteo_sample,
 )
@@ -125,17 +126,71 @@ def _rank_models(results: list[dict[str, float | str]]) -> pd.DataFrame:
     return ranking
 
 
+def _build_variant_paths(
+    app_config: AppConfig,
+    training_config: TrainingConfig,
+) -> dict[str, Path]:
+    paths = resolve_training_output_paths(training_config, Path(app_config.artifact_dir))
+    evaluation_dir = paths["evaluation_dir"]
+    reports_dir = paths["reports_dir"]
+    plots_dir = paths["plots_dir"]
+    return {
+        "evaluation_dir": evaluation_dir,
+        "reports_dir": reports_dir,
+        "plots_dir": plots_dir,
+    }
+
+
+def resolve_training_output_paths(
+    training_config: TrainingConfig,
+    artifact_root: Path,
+) -> dict[str, Path]:
+    variant = dataset_variant_from_config(training_config)
+    return {
+        "evaluation_dir": artifact_root / "evaluation" / variant,
+        "reports_dir": artifact_root / "reports" / variant,
+        "plots_dir": artifact_root / "plots" / variant,
+    }
+
+
+def _dataset_mlflow_tags(
+    training_config: TrainingConfig,
+    row_count_train: int,
+    row_count_validation: int,
+    row_count_test: int,
+) -> dict[str, str]:
+    return {
+        "dataset_variant": dataset_variant_from_config(training_config),
+        "data_percent10": str(training_config.data.percent10).lower(),
+        "sample_size": str(training_config.data.sample_size),
+        "row_count_train": str(row_count_train),
+        "row_count_validation": str(row_count_validation),
+        "row_count_test": str(row_count_test),
+    }
+
+
 def run_full_training(config_path: str | Path) -> dict[str, object]:
     app_config = AppConfig.from_env()
     training_config: TrainingConfig = load_training_config(config_path)
     initialize_mlflow(app_config)
 
-    dataset = load_criteo_dataset(sample_size=training_config.sample_size)
+    dataset = load_criteo_dataset(
+        sample_size=training_config.data.sample_size,
+        percent10=training_config.data.percent10,
+        target_col=training_config.data.target_col,
+        treatment_col=training_config.data.treatment_col,
+    )
     split = create_train_validation_test_split(
         dataset,
-        validation_size=training_config.split.validation_size,
-        test_size=training_config.split.test_size,
-        random_state=app_config.random_state,
+        validation_size=training_config.data.validation_size,
+        test_size=training_config.data.test_size,
+        random_state=training_config.random_state,
+    )
+    dataset_tags = _dataset_mlflow_tags(
+        training_config,
+        row_count_train=len(split.X_train),
+        row_count_validation=len(split.X_validation),
+        row_count_test=len(split.X_test),
     )
 
     preprocessor = NumericFeaturePreprocessor()
@@ -154,7 +209,8 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
     t_validation = split.treatment_validation.reset_index(drop=True)
     t_test = split.treatment_test.reset_index(drop=True)
 
-    evaluation_dir = Path(app_config.artifact_dir) / "evaluation"
+    variant_paths = _build_variant_paths(app_config, training_config)
+    evaluation_dir = variant_paths["evaluation_dir"]
     results: list[dict[str, float | str]] = []
     prediction_frames: list[pd.DataFrame] = []
 
@@ -162,19 +218,20 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
         if model_name == "ft_transformer":
             transformer_model = FTTransformerUpliftModel(
                 num_features=X_train_np.shape[1] + 1,
-                d_token=training_config.transformer.d_token,
+                d_token=training_config.transformer.embedding_dim,
                 num_layers=training_config.transformer.num_layers,
                 num_heads=training_config.transformer.num_heads,
                 dropout=training_config.transformer.dropout,
+                hidden_dim=training_config.transformer.hidden_dim,
             )
             trainer = TorchUpliftTrainer(
                 model=transformer_model,
-                learning_rate=training_config.transformer.learning_rate,
-                weight_decay=training_config.transformer.weight_decay,
-                batch_size=training_config.transformer.batch_size,
-                epochs=training_config.transformer.epochs,
-                patience=training_config.transformer.patience,
-                random_state=app_config.random_state,
+                learning_rate=training_config.training.learning_rate,
+                weight_decay=training_config.training.weight_decay,
+                batch_size=training_config.training.batch_size,
+                epochs=training_config.training.max_epochs,
+                patience=training_config.training.early_stopping_patience,
+                random_state=training_config.random_state,
             )
 
             train_inputs = np.concatenate(
@@ -186,7 +243,7 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
                 axis=1,
             )
 
-            model_path = Path(app_config.model_dir) / "best_transformer_uplift.pt"
+            model_path = Path(app_config.model_dir) / training_config.artifacts.best_model_name
             trainer.fit(
                 X_train=train_inputs,
                 y_train=y_train.to_numpy(dtype=np.float32),
@@ -197,17 +254,18 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
             prediction = trainer.predict_uplift(X_test_np)
             model_kind = "transformer"
             run_params: dict[str, int | float | str] = {
-                "sample_size": training_config.sample_size,
-                "random_state": app_config.random_state,
-                "d_token": training_config.transformer.d_token,
+                "sample_size": training_config.data.sample_size,
+                "random_state": training_config.random_state,
+                "embedding_dim": training_config.transformer.embedding_dim,
                 "num_layers": training_config.transformer.num_layers,
                 "num_heads": training_config.transformer.num_heads,
                 "dropout": training_config.transformer.dropout,
-                "learning_rate": training_config.transformer.learning_rate,
-                "weight_decay": training_config.transformer.weight_decay,
-                "batch_size": training_config.transformer.batch_size,
-                "epochs": training_config.transformer.epochs,
-                "patience": training_config.transformer.patience,
+                "hidden_dim": training_config.transformer.hidden_dim,
+                "learning_rate": training_config.training.learning_rate,
+                "weight_decay": training_config.training.weight_decay,
+                "batch_size": training_config.training.batch_size,
+                "max_epochs": training_config.training.max_epochs,
+                "early_stopping_patience": training_config.training.early_stopping_patience,
             }
         else:
             trained_model, prediction = _train_baseline_model(
@@ -221,8 +279,8 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
             joblib.dump(trained_model, model_path)
             model_kind = "baseline"
             run_params = {
-                "sample_size": training_config.sample_size,
-                "random_state": app_config.random_state,
+                "sample_size": training_config.data.sample_size,
+                "random_state": training_config.random_state,
                 "model": model_name,
             }
 
@@ -253,7 +311,11 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
 
         with start_model_run(
             model_name=model_name,
-            tags={"pipeline": "full", "model_kind": model_kind},
+            tags={
+                "pipeline": "full",
+                "model_kind": model_kind,
+                **dataset_tags,
+            },
         ):
             log_run_payload(
                 params=run_params,
@@ -266,14 +328,17 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
     ranking = _rank_models(results)
     best_model_name = str(ranking.iloc[0]["model_name"])
 
-    final_metrics_path = evaluation_dir / "full_training_metrics.json"
-    final_predictions_path = evaluation_dir / "test_predictions.csv"
+    final_metrics_path = evaluation_dir / training_config.artifacts.metrics_name
+    final_predictions_path = evaluation_dir / training_config.artifacts.predictions_name
     consolidated_metrics = {
         "best_model": best_model_name,
+        "dataset_variant": dataset_variant_from_config(training_config),
+        "data_percent10": training_config.data.percent10,
         "selection_metric": "qini_auc",
         "tie_breaker": "policy_gain_top20",
         "ranking": ranking.to_dict(orient="records"),
     }
+    evaluation_dir.mkdir(parents=True, exist_ok=True)
     with final_metrics_path.open("w", encoding="utf-8") as handle:
         json.dump(consolidated_metrics, handle, indent=2)
     pd.concat(prediction_frames, ignore_index=True).to_csv(final_predictions_path, index=False)
@@ -300,15 +365,16 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
 
 def run_reporting(config_path: str | Path) -> dict[str, object]:
     app_config = AppConfig.from_env()
-    _ = load_training_config(config_path)
+    training_config = load_training_config(config_path)
     initialize_mlflow(app_config)
 
-    evaluation_dir = Path(app_config.artifact_dir) / "evaluation"
-    reports_dir = Path(app_config.artifact_dir) / "reports"
-    plots_dir = Path(app_config.artifact_dir) / "plots"
+    variant_paths = _build_variant_paths(app_config, training_config)
+    evaluation_dir = variant_paths["evaluation_dir"]
+    reports_dir = variant_paths["reports_dir"]
+    plots_dir = variant_paths["plots_dir"]
 
-    metrics_path = evaluation_dir / "full_training_metrics.json"
-    predictions_path = evaluation_dir / "test_predictions.csv"
+    metrics_path = evaluation_dir / training_config.artifacts.metrics_name
+    predictions_path = evaluation_dir / training_config.artifacts.predictions_name
     if not metrics_path.exists():
         raise FileNotFoundError(
             f"Missing required metrics artifact at {metrics_path}. Run full training first."
@@ -341,13 +407,34 @@ def run_reporting(config_path: str | Path) -> dict[str, object]:
         plot_outputs["policy_gain_curve"],
     ]
 
+    row_counts = {"train": 0, "validation": 0, "test": 0}
+    manifest_path = (
+        Path(app_config.artifact_dir)
+        / "data"
+        / dataset_variant_from_config(training_config)
+        / "data_manifest.json"
+    )
+    if manifest_path.exists():
+        with manifest_path.open("r", encoding="utf-8") as handle:
+            manifest_payload = json.load(handle)
+        row_counts = {
+            "train": int(manifest_payload.get("row_counts", {}).get("train", 0)),
+            "validation": int(manifest_payload.get("row_counts", {}).get("validation", 0)),
+            "test": int(manifest_payload.get("row_counts", {}).get("test", 0)),
+        }
+
     with start_named_run(
         run_name="reporting-artifact-consolidation",
         tags={
             "project": "causal-uplift-transformer-beam",
             "run_type": "reporting",
             "artifact_scope": "readme_and_dashboard",
-            "dataset": "criteo_uplift_percent10",
+            "dataset_variant": dataset_variant_from_config(training_config),
+            "data_percent10": str(training_config.data.percent10).lower(),
+            "sample_size": str(training_config.data.sample_size),
+            "row_count_train": str(row_counts["train"]),
+            "row_count_validation": str(row_counts["validation"]),
+            "row_count_test": str(row_counts["test"]),
         },
     ):
         log_run_payload(

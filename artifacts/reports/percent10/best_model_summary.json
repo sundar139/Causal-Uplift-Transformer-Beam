@@ -1,0 +1,15 @@
+{
+  "best_model": "ft_transformer",
+  "selection_metric": "qini_auc",
+  "qini_auc": 0.192830646704619,
+  "uplift_auc": 0.006253174485061456,
+  "policy_gain_top10": 0.008808750390390557,
+  "policy_gain_top20": 0.004965886369372969,
+  "policy_gain_top30": 0.0035000812923774898,
+  "treatment_response_auc": 0.9424991072296492,
+  "mean_predicted_uplift": 0.0005343352278577042,
+  "positive_uplift_rate": 0.20334868904212805,
+  "generated_at_utc": "2026-05-03T04:26:58.680099+00:00",
+  "source_metrics_path": "artifacts\\evaluation\\percent10\\full_training_metrics.json",
+  "source_predictions_path": "artifacts\\evaluation\\percent10\\test_predictions.csv"
+}

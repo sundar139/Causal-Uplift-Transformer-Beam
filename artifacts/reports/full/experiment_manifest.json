@@ -1,0 +1,25 @@
+{
+  "project_name": "causal-uplift-transformer-beam",
+  "python_package": "causal_uplift",
+  "mlflow_tracking_uri": "sqlite:///mlflow.db",
+  "experiment_name": "causal-uplift-training",
+  "generated_at_utc": "2026-05-03T05:31:55.480948+00:00",
+  "available_models": [
+    "ft_transformer",
+    "s_learner_logistic",
+    "two_model_logistic",
+    "t_learner_logistic"
+  ],
+  "report_artifacts": [
+    "artifacts\\reports\\full\\model_ranking.csv",
+    "artifacts\\reports\\full\\model_ranking.json",
+    "artifacts\\reports\\full\\best_model_summary.json",
+    "artifacts\\reports\\full\\experiment_manifest.json"
+  ],
+  "plot_artifacts": [
+    "artifacts\\plots\\full\\qini_curve.png",
+    "artifacts\\plots\\full\\uplift_curve.png",
+    "artifacts\\plots\\full\\policy_gain_curve.png"
+  ],
+  "notes": "Best model selected by qini_auc with policy_gain_top20 tie-breaker."
+}

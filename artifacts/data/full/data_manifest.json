@@ -1,0 +1,45 @@
+{
+  "dataset_name": "Criteo Uplift Prediction (full)",
+  "source": "scikit-uplift",
+  "loader": "sklift.datasets.fetch_criteo(percent10=False)",
+  "target_column": "conversion",
+  "treatment_column": "treatment",
+  "feature_columns": [
+    "f0",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11"
+  ],
+  "row_counts": {
+    "train": 8387755,
+    "validation": 2795918,
+    "test": 2795919
+  },
+  "outcome_rate": {
+    "train": 0.0029167518603011176,
+    "validation": 0.002916394543759867,
+    "test": 0.0029167511648227292
+  },
+  "treatment_rate": {
+    "train": 0.8500001490267658,
+    "validation": 0.8500002503649964,
+    "test": 0.8499999463503771
+  },
+  "random_state": 42,
+  "generated_at_utc": "2026-05-03T04:29:20.860911+00:00",
+  "local_raw_path": "data\\raw\\criteo_full.parquet",
+  "local_processed_paths": {
+    "train": "data\\processed\\full\\train.parquet",
+    "validation": "data\\processed\\full\\validation.parquet",
+    "test": "data\\processed\\full\\test.parquet"
+  },
+  "git_tracking_policy": "Raw and processed parquet files are git-ignored. Lightweight artifacts in artifacts/data are tracked for lineage."
+}

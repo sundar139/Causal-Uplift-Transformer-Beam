@@ -31,14 +31,16 @@ class FTTransformerUpliftModel(nn.Module):
         num_layers: int = 2,
         num_heads: int = 4,
         dropout: float = 0.1,
+        hidden_dim: int | None = None,
     ) -> None:
         super().__init__()
         self.tokenizer = NumericFeatureTokenizer(num_features=num_features, d_token=d_token)
         self.cls_token = nn.Parameter(torch.zeros(1, 1, d_token))
+        feedforward_dim = hidden_dim if hidden_dim is not None else d_token * 4
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_token,
             nhead=num_heads,
-            dim_feedforward=d_token * 4,
+            dim_feedforward=feedforward_dim,
             dropout=dropout,
             batch_first=True,
             activation="gelu",
@@ -160,11 +162,20 @@ class TorchUpliftTrainer:
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:
         self.model.eval()
-        tensor = torch.from_numpy(X.astype(np.float32)).to(self.device)
+        dataset = TensorDataset(torch.from_numpy(X.astype(np.float32)))
+        loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=False)
+        chunks: list[np.ndarray] = []
+
         with torch.no_grad():
-            logits = self.model(tensor)
-            probabilities = torch.sigmoid(logits)
-        return probabilities.detach().cpu().numpy().astype(np.float64)
+            for (features,) in loader:
+                features = features.to(self.device)
+                logits = self.model(features)
+                probabilities = torch.sigmoid(logits)
+                chunks.append(probabilities.detach().cpu().numpy().astype(np.float64))
+
+        if not chunks:
+            return np.array([], dtype=np.float64)
+        return np.concatenate(chunks, axis=0)
 
     def predict_uplift(self, X_base: np.ndarray) -> UpliftPrediction:
         treatment_col = np.ones((X_base.shape[0], 1), dtype=np.float32)

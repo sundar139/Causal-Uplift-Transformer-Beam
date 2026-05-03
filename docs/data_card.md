@@ -1,13 +1,16 @@
-# Data Card: Criteo Uplift Prediction (percent10)
+# Data Card: Criteo Uplift Prediction
 
 ## Dataset name
 
-Criteo Uplift Prediction dataset (percent10 subset), accessed through scikit-uplift.
+Criteo Uplift Prediction dataset, accessed through scikit-uplift in two modes:
+
+- percent10 mode for fast iteration
+- full mode for final training
 
 ## Source
 
 - Provider: Criteo
-- Access path: `sklift.datasets.fetch_criteo(percent10=True)`
+- Access path: `sklift.datasets.fetch_criteo(percent10=True|False)`
 - Loader in this project: `causal_uplift.data.load_criteo_dataset`
 
 ## What the dataset represents
@@ -18,7 +21,7 @@ This dataset is used for uplift modeling: estimating the incremental effect of t
 
 - Target variable: `conversion`
 - Treatment variable: `treatment`
-- Features: anonymized numeric features (schema is documented in `artifacts/data/criteo_schema.json`)
+- Features: anonymized numeric features (schema is documented per mode)
 
 ## Split policy
 
@@ -28,7 +31,7 @@ The project uses a deterministic stratified split by `(conversion, treatment)`:
 - Validation: `validation_size`
 - Test: `test_size`
 
-Default values come from `configs/training.yaml` and randomness is controlled by `RANDOM_STATE`.
+Default values come from each config file (`configs/training.yaml` and `configs/training_full.yaml`) and randomness is controlled by `random_state` in config.
 
 ## Why full raw data is not committed
 
@@ -40,27 +43,37 @@ Materialize local data files:
 
 ```bash
 uv run python -m causal_uplift.data materialize --config configs/training.yaml
+uv run python -m causal_uplift.data materialize --config configs/training_full.yaml
 ```
 
 Generate profile and lineage artifacts:
 
 ```bash
 uv run python -m causal_uplift.data profile --config configs/training.yaml
+uv run python -m causal_uplift.data profile --config configs/training_full.yaml
 ```
 
 Expected local parquet outputs:
 
 - `data/raw/criteo_percent10.parquet`
-- `data/processed/train.parquet`
-- `data/processed/validation.parquet`
-- `data/processed/test.parquet`
+- `data/processed/percent10/train.parquet`
+- `data/processed/percent10/validation.parquet`
+- `data/processed/percent10/test.parquet`
+- `data/raw/criteo_full.parquet`
+- `data/processed/full/train.parquet`
+- `data/processed/full/validation.parquet`
+- `data/processed/full/test.parquet`
 
 Expected lightweight tracked artifacts:
 
-- `artifacts/data/criteo_data_profile.json`
-- `artifacts/data/criteo_schema.json`
-- `artifacts/data/criteo_sample_preview.csv`
-- `artifacts/data/data_manifest.json`
+- `artifacts/data/percent10/criteo_data_profile.json`
+- `artifacts/data/percent10/criteo_schema.json`
+- `artifacts/data/percent10/criteo_sample_preview.csv`
+- `artifacts/data/percent10/data_manifest.json`
+- `artifacts/data/full/criteo_data_profile.json`
+- `artifacts/data/full/criteo_schema.json`
+- `artifacts/data/full/criteo_sample_preview.csv`
+- `artifacts/data/full/data_manifest.json`
 
 ## Limitations and ethical notes
 

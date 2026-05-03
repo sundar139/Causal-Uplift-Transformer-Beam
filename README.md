@@ -58,43 +58,74 @@ Primary outputs:
 
 - mlflow.db
 - models/best_transformer_uplift.pt
-- artifacts/evaluation/full_training_metrics.json
-- artifacts/evaluation/test_predictions.csv
+- artifacts/evaluation/percent10/full_training_metrics.json
+- artifacts/evaluation/percent10/test_predictions.csv
 
-## Data
+## Dataset modes
 
-Dataset used:
+This project supports two dataset modes with separate local parquet, profile, and evaluation paths:
 
-- Criteo Uplift Prediction via `sklift.datasets.fetch_criteo(percent10=True)`
+- `percent10` mode (`configs/training.yaml`) for fast iteration
+- `full` mode (`configs/training_full.yaml`) for final model training
 
-Why `data/raw` and `data/processed` may be empty initially:
+Dataset source for both modes:
 
-- The dataset is downloaded/materialized locally on demand.
-- Raw and processed parquet files are git-ignored to keep the repository lightweight.
+- Criteo Uplift Prediction via `sklift.datasets.fetch_criteo(...)`
 
-Materialize local parquet data:
+Materialize and profile `percent10` mode:
 
 ```bash
 uv run python -m causal_uplift.data materialize --config configs/training.yaml
-```
-
-Generate data lineage/profile artifacts:
-
-```bash
 uv run python -m causal_uplift.data profile --config configs/training.yaml
 ```
+
+Materialize and profile `full` mode:
+
+```bash
+uv run python -m causal_uplift.data materialize --config configs/training_full.yaml
+uv run python -m causal_uplift.data profile --config configs/training_full.yaml
+```
+
+Train and report `percent10` mode:
+
+```bash
+uv run python -m causal_uplift.train full --config configs/training.yaml
+uv run python -m causal_uplift.train report --config configs/training.yaml
+```
+
+Train and report `full` mode:
+
+```bash
+uv run python -m causal_uplift.train full --config configs/training_full.yaml
+uv run python -m causal_uplift.train report --config configs/training_full.yaml
+```
+
+Why `data/raw` and `data/processed` are empty in Git:
+
+- The dataset is downloaded/materialized locally on demand.
+- Parquet files are git-ignored and must be regenerated locally.
 
 Ignored local data files:
 
 - data/raw/*.parquet
-- data/processed/*.parquet
+- data/processed/**/*.parquet
 
-Tracked lightweight data artifacts:
+Tracked lightweight lineage artifacts:
 
-- artifacts/data/criteo_data_profile.json
-- artifacts/data/criteo_schema.json
-- artifacts/data/criteo_sample_preview.csv
-- artifacts/data/data_manifest.json
+- artifacts/data/percent10/*.json
+- artifacts/data/percent10/*.csv
+- artifacts/data/full/*.json
+- artifacts/data/full/*.csv
+
+Row-count check:
+
+- Inspect `row_counts` in:
+  - `artifacts/data/percent10/data_manifest.json`
+  - `artifacts/data/full/data_manifest.json`
+- Full mode should have a larger total row count than percent10 mode.
+
+## Data card
+
 - docs/data_card.md
 
 ## Reporting artifacts
@@ -165,7 +196,11 @@ uv run black --check src tests
 uv run pytest
 uv run python -m causal_uplift.data materialize --config configs/training.yaml
 uv run python -m causal_uplift.data profile --config configs/training.yaml
+uv run python -m causal_uplift.data materialize --config configs/training_full.yaml
+uv run python -m causal_uplift.data profile --config configs/training_full.yaml
 uv run python -m causal_uplift.train smoke --sample-size 10000
 uv run python -m causal_uplift.train full --config configs/training.yaml
 uv run python -m causal_uplift.train report --config configs/training.yaml
+uv run python -m causal_uplift.train full --config configs/training_full.yaml
+uv run python -m causal_uplift.train report --config configs/training_full.yaml
 ```

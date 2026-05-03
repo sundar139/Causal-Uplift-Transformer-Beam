@@ -9,7 +9,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklift.datasets import fetch_criteo
 
-from causal_uplift.config import AppConfig, load_training_config
+from causal_uplift.config import AppConfig, TrainingConfig, load_training_config
 from causal_uplift.data_profile import (
     build_manifest_payload,
     build_profile_payload,
@@ -20,7 +20,8 @@ from causal_uplift.data_profile import (
 
 TARGET_COLUMN = "conversion"
 TREATMENT_COLUMN = "treatment"
-DATASET_NAME = "Criteo Uplift Prediction (percent10)"
+PERCENT10_DATASET_NAME = "Criteo Uplift Prediction (percent10)"
+FULL_DATASET_NAME = "Criteo Uplift Prediction (full)"
 DATASET_SOURCE = "scikit-uplift"
 DATASET_LOADER = "sklift.datasets.fetch_criteo"
 
@@ -64,12 +65,24 @@ def _clean_numeric_features(features: pd.DataFrame) -> pd.DataFrame:
     return clean
 
 
-def load_criteo_dataset(sample_size: int = 0) -> CriteoDataset:
+def load_criteo_dataset(
+    sample_size: int = 0,
+    *,
+    percent10: bool = True,
+    target_col: str = TARGET_COLUMN,
+    treatment_col: str = TREATMENT_COLUMN,
+) -> CriteoDataset:
+    if not percent10:
+        print(
+            "WARNING: Loading full Criteo dataset (percent10=false). "
+            "This may require significant disk, memory, and training time."
+        )
+
     X, y, treatment = fetch_criteo(
-        target_col=TARGET_COLUMN,
-        treatment_col=TREATMENT_COLUMN,
+        target_col=target_col,
+        treatment_col=treatment_col,
         return_X_y_t=True,
-        percent10=True,
+        percent10=percent10,
     )
 
     X_df = _clean_numeric_features(pd.DataFrame(X).reset_index(drop=True))
@@ -136,7 +149,7 @@ def load_criteo_sample(
     test_size: float = 0.2,
     random_state: int = 42,
 ) -> CriteoSample:
-    dataset = load_criteo_dataset(sample_size=sample_size)
+    dataset = load_criteo_dataset(sample_size=sample_size, percent10=True)
     X_df = dataset.features
     y_series = dataset.outcomes
     treatment_series = dataset.treatment
@@ -198,30 +211,68 @@ def build_processed_split_frames(split: DatasetSplit) -> dict[str, pd.DataFrame]
     }
 
 
+def dataset_variant_from_config(config: TrainingConfig) -> str:
+    return config.data.dataset_variant
+
+
+def resolve_materialization_paths(config: TrainingConfig) -> dict[str, object]:
+    variant = dataset_variant_from_config(config)
+    raw_name = "criteo_percent10.parquet" if config.data.percent10 else "criteo_full.parquet"
+    processed_base = Path("data/processed") / variant
+    processed_paths = {
+        "train": processed_base / "train.parquet",
+        "validation": processed_base / "validation.parquet",
+        "test": processed_base / "test.parquet",
+    }
+    return {
+        "dataset_variant": variant,
+        "raw_path": Path("data/raw") / raw_name,
+        "processed_paths": processed_paths,
+        "artifact_dir": Path("artifacts/data") / variant,
+    }
+
+
+def _validate_full_vs_percent10_row_counts(full_row_count: int) -> None:
+    percent10_manifest = Path("artifacts/data/percent10/data_manifest.json")
+    full_manifest = Path("artifacts/data/full/data_manifest.json")
+    if not (percent10_manifest.exists() and full_manifest.exists()):
+        return
+
+    with percent10_manifest.open("r", encoding="utf-8") as handle:
+        percent10_payload = json.load(handle)
+    baseline_count = int(sum(percent10_payload.get("row_counts", {}).values()))
+    if full_row_count <= baseline_count:
+        raise ValueError(
+            "Full dataset materialization produced a row count that is not larger than percent10. "
+            "Check configuration and dataset source."
+        )
+
+
 def _load_split_from_config(config_path: str | Path) -> tuple[DatasetSplit, CriteoDataset, int]:
-    app_config = AppConfig.from_env()
     training_config = load_training_config(config_path)
 
-    dataset = load_criteo_dataset(sample_size=training_config.sample_size)
+    dataset = load_criteo_dataset(
+        sample_size=training_config.data.sample_size,
+        percent10=training_config.data.percent10,
+        target_col=training_config.data.target_col,
+        treatment_col=training_config.data.treatment_col,
+    )
     split = create_train_validation_test_split(
         dataset,
-        validation_size=training_config.split.validation_size,
-        test_size=training_config.split.test_size,
-        random_state=app_config.random_state,
+        validation_size=training_config.data.validation_size,
+        test_size=training_config.data.test_size,
+        random_state=training_config.random_state,
     )
-    return split, dataset, app_config.random_state
+    return split, dataset, training_config.random_state
 
 
 def materialize_dataset(config_path: str | Path) -> dict[str, object]:
+    training_config = load_training_config(config_path)
     split, dataset, random_state = _load_split_from_config(config_path)
     split_frames = build_processed_split_frames(split)
-
-    raw_path = Path("data/raw/criteo_percent10.parquet")
-    processed_paths = {
-        "train": Path("data/processed/train.parquet"),
-        "validation": Path("data/processed/validation.parquet"),
-        "test": Path("data/processed/test.parquet"),
-    }
+    paths = resolve_materialization_paths(training_config)
+    raw_path: Path = paths["raw_path"]
+    processed_paths: dict[str, Path] = paths["processed_paths"]
 
     raw_path.parent.mkdir(parents=True, exist_ok=True)
     for path in processed_paths.values():
@@ -235,8 +286,16 @@ def materialize_dataset(config_path: str | Path) -> dict[str, object]:
     for split_name, split_frame in split_frames.items():
         split_frame.to_parquet(processed_paths[split_name], index=False)
 
+    total_rows = int(sum(len(frame) for frame in split_frames.values()))
+    if not training_config.data.percent10:
+        _validate_full_vs_percent10_row_counts(total_rows)
+
+    dataset_name = PERCENT10_DATASET_NAME if training_config.data.percent10 else FULL_DATASET_NAME
+
     summary = {
-        "dataset": DATASET_NAME,
+        "dataset": dataset_name,
+        "dataset_variant": paths["dataset_variant"],
+        "percent10": training_config.data.percent10,
         "random_state": random_state,
         "raw_path": str(raw_path),
         "processed_paths": {name: str(path) for name, path in processed_paths.items()},
@@ -246,12 +305,10 @@ def materialize_dataset(config_path: str | Path) -> dict[str, object]:
     return summary
 
 
-def _load_processed_frames_if_available() -> tuple[dict[str, pd.DataFrame] | None, dict[str, Path]]:
-    processed_paths = {
-        "train": Path("data/processed/train.parquet"),
-        "validation": Path("data/processed/validation.parquet"),
-        "test": Path("data/processed/test.parquet"),
-    }
+def _load_processed_frames_if_available(
+    config: TrainingConfig,
+) -> tuple[dict[str, pd.DataFrame] | None, dict[str, Path]]:
+    processed_paths = resolve_materialization_paths(config)["processed_paths"]
     if all(path.exists() for path in processed_paths.values()):
         return (
             {split_name: pd.read_parquet(path) for split_name, path in processed_paths.items()},
@@ -261,18 +318,20 @@ def _load_processed_frames_if_available() -> tuple[dict[str, pd.DataFrame] | Non
 
 
 def profile_dataset(config_path: str | Path) -> dict[str, object]:
-    app_config = AppConfig.from_env()
-    loaded_frames, processed_paths = _load_processed_frames_if_available()
+    _ = AppConfig.from_env()
+    training_config = load_training_config(config_path)
+    paths = resolve_materialization_paths(training_config)
+    loaded_frames, processed_paths = _load_processed_frames_if_available(training_config)
 
     if loaded_frames is None:
         split, dataset, random_state = _load_split_from_config(config_path)
         split_frames = build_processed_split_frames(split)
-        raw_path = Path("data/raw/criteo_percent10.parquet")
+        raw_path: Path = paths["raw_path"]
         feature_columns = list(dataset.features.columns)
     else:
         split_frames = loaded_frames
-        raw_path = Path("data/raw/criteo_percent10.parquet")
-        random_state = app_config.random_state
+        raw_path = paths["raw_path"]
+        random_state = training_config.random_state
         train_columns = split_frames["train"].columns
         feature_columns = [
             column
@@ -292,11 +351,13 @@ def profile_dataset(config_path: str | Path) -> dict[str, object]:
         treatment_column=TREATMENT_COLUMN,
     )
     manifest_payload = build_manifest_payload(
-        dataset_name=DATASET_NAME,
+        dataset_name=(
+            PERCENT10_DATASET_NAME if training_config.data.percent10 else FULL_DATASET_NAME
+        ),
         source=DATASET_SOURCE,
-        loader=DATASET_LOADER,
-        target_column=TARGET_COLUMN,
-        treatment_column=TREATMENT_COLUMN,
+        loader=f"{DATASET_LOADER}(percent10={training_config.data.percent10})",
+        target_column=training_config.data.target_col,
+        treatment_column=training_config.data.treatment_col,
         feature_columns=feature_columns,
         split_frames=split_frames,
         random_state=random_state,
@@ -304,7 +365,7 @@ def profile_dataset(config_path: str | Path) -> dict[str, object]:
         local_processed_paths=processed_paths,
     )
 
-    artifact_dir = Path("artifacts/data")
+    artifact_dir: Path = paths["artifact_dir"]
     profile_path = artifact_dir / "criteo_data_profile.json"
     schema_path = artifact_dir / "criteo_schema.json"
     preview_path = artifact_dir / "criteo_sample_preview.csv"
@@ -316,6 +377,7 @@ def profile_dataset(config_path: str | Path) -> dict[str, object]:
     build_sample_preview(merged, max_rows=100).to_csv(preview_path, index=False)
 
     summary = {
+        "dataset_variant": paths["dataset_variant"],
         "profile_artifact": str(profile_path),
         "schema_artifact": str(schema_path),
         "sample_preview_artifact": str(preview_path),
