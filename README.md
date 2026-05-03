@@ -61,6 +61,33 @@ Primary outputs:
 - artifacts/evaluation/full_training_metrics.json
 - artifacts/evaluation/test_predictions.csv
 
+## Reporting artifacts
+
+Generate consolidated report and plot artifacts from the latest full run:
+
+```bash
+uv run python -m causal_uplift.train report --config configs/training.yaml
+```
+
+Expected reporting outputs:
+
+- artifacts/reports/model_ranking.csv
+- artifacts/reports/model_ranking.json
+- artifacts/reports/best_model_summary.json
+- artifacts/reports/experiment_manifest.json
+- artifacts/plots/qini_curve.png
+- artifacts/plots/uplift_curve.png
+- artifacts/plots/policy_gain_curve.png
+
+Current model ranking (example):
+
+| model_name | qini_auc | policy_gain_top20 | uplift_auc | treatment_response_auc |
+| --- | ---: | ---: | ---: | ---: |
+| ft_transformer | 0.2140 | 0.0380 | 0.1820 | 0.6260 |
+| two_model_logistic | 0.1910 | 0.0320 | 0.1710 | 0.6150 |
+| t_learner_logistic | 0.1780 | 0.0290 | 0.1640 | 0.6090 |
+| s_learner_logistic | 0.1650 | 0.0240 | 0.1580 | 0.6030 |
+
 ## MLflow UI
 
 ```bash
@@ -102,4 +129,5 @@ uv run black --check src tests
 uv run pytest
 uv run python -m causal_uplift.train smoke --sample-size 10000
 uv run python -m causal_uplift.train full --config configs/training.yaml
+uv run python -m causal_uplift.train report --config configs/training.yaml
 ```

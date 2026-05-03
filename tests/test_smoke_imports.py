@@ -10,7 +10,9 @@ def test_smoke_imports() -> None:
     import causal_uplift.data  # noqa: F401
     import causal_uplift.evaluate  # noqa: F401
     import causal_uplift.mlflow_utils  # noqa: F401
+    import causal_uplift.plots  # noqa: F401
     import causal_uplift.preprocessing  # noqa: F401
+    import causal_uplift.reporting  # noqa: F401
     import causal_uplift.serve  # noqa: F401
     import causal_uplift.train  # noqa: F401
     import causal_uplift.transformer  # noqa: F401

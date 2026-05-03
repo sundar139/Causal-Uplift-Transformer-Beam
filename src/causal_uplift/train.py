@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 from pathlib import Path
 
 import joblib
@@ -26,8 +25,16 @@ from causal_uplift.evaluate import (
     compute_uplift_metrics,
     export_evaluation_artifacts,
 )
-from causal_uplift.mlflow_utils import initialize_mlflow, log_run_payload, start_model_run
+from causal_uplift.mlflow_utils import (
+    initialize_mlflow,
+    log_artifacts,
+    log_run_payload,
+    start_model_run,
+    start_named_run,
+)
+from causal_uplift.plots import generate_curve_plots
 from causal_uplift.preprocessing import NumericFeaturePreprocessor
+from causal_uplift.reporting import generate_reporting_artifacts
 from causal_uplift.transformer import FTTransformerUpliftModel, TorchUpliftTrainer
 
 
@@ -149,7 +156,7 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
 
     evaluation_dir = Path(app_config.artifact_dir) / "evaluation"
     results: list[dict[str, float | str]] = []
-    model_artifacts: dict[str, tuple[Path, Path]] = {}
+    prediction_frames: list[pd.DataFrame] = []
 
     for model_name in training_config.models:
         if model_name == "ft_transformer":
@@ -242,6 +249,7 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
             metrics_path=metrics_path,
             predictions_path=predictions_path,
         )
+        prediction_frames.append(prediction_frame)
 
         with start_model_run(
             model_name=model_name,
@@ -254,16 +262,21 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
             )
 
         results.append({"model_name": model_name, **metrics})
-        model_artifacts[model_name] = (metrics_path, predictions_path)
 
     ranking = _rank_models(results)
     best_model_name = str(ranking.iloc[0]["model_name"])
-    best_metrics_path, best_predictions_path = model_artifacts[best_model_name]
 
     final_metrics_path = evaluation_dir / "full_training_metrics.json"
     final_predictions_path = evaluation_dir / "test_predictions.csv"
-    shutil.copyfile(best_metrics_path, final_metrics_path)
-    shutil.copyfile(best_predictions_path, final_predictions_path)
+    consolidated_metrics = {
+        "best_model": best_model_name,
+        "selection_metric": "qini_auc",
+        "tie_breaker": "policy_gain_top20",
+        "ranking": ranking.to_dict(orient="records"),
+    }
+    with final_metrics_path.open("w", encoding="utf-8") as handle:
+        json.dump(consolidated_metrics, handle, indent=2)
+    pd.concat(prediction_frames, ignore_index=True).to_csv(final_predictions_path, index=False)
 
     table_columns = [
         "model_name",
@@ -281,6 +294,80 @@ def run_full_training(config_path: str | Path) -> dict[str, object]:
         "full_metrics_path": str(final_metrics_path),
         "predictions_path": str(final_predictions_path),
     }
+    print(json.dumps(summary, indent=2))
+    return summary
+
+
+def run_reporting(config_path: str | Path) -> dict[str, object]:
+    app_config = AppConfig.from_env()
+    _ = load_training_config(config_path)
+    initialize_mlflow(app_config)
+
+    evaluation_dir = Path(app_config.artifact_dir) / "evaluation"
+    reports_dir = Path(app_config.artifact_dir) / "reports"
+    plots_dir = Path(app_config.artifact_dir) / "plots"
+
+    metrics_path = evaluation_dir / "full_training_metrics.json"
+    predictions_path = evaluation_dir / "test_predictions.csv"
+    if not metrics_path.exists():
+        raise FileNotFoundError(
+            f"Missing required metrics artifact at {metrics_path}. Run full training first."
+        )
+    if not predictions_path.exists():
+        raise FileNotFoundError(
+            f"Missing required prediction artifact at {predictions_path}. Run full training first."
+        )
+
+    plot_outputs = generate_curve_plots(predictions_path=predictions_path, output_dir=plots_dir)
+    reporting_result = generate_reporting_artifacts(
+        metrics_path=metrics_path,
+        predictions_path=predictions_path,
+        output_dir=reports_dir,
+        project_name="causal-uplift-transformer-beam",
+        python_package="causal_uplift",
+        mlflow_tracking_uri=app_config.mlflow_tracking_uri,
+        experiment_name=app_config.mlflow_experiment_name,
+        plot_artifacts=list(plot_outputs.values()),
+    )
+
+    report_paths = reporting_result["report_paths"]
+    artifact_paths = [
+        report_paths["model_ranking_csv"],
+        report_paths["model_ranking_json"],
+        report_paths["best_model_summary_json"],
+        report_paths["experiment_manifest_json"],
+        plot_outputs["qini_curve"],
+        plot_outputs["uplift_curve"],
+        plot_outputs["policy_gain_curve"],
+    ]
+
+    with start_named_run(
+        run_name="reporting-artifact-consolidation",
+        tags={
+            "project": "causal-uplift-transformer-beam",
+            "run_type": "reporting",
+            "artifact_scope": "readme_and_dashboard",
+            "dataset": "criteo_uplift_percent10",
+        },
+    ):
+        log_run_payload(
+            params={
+                "config_path": str(config_path),
+                "source_metrics_path": str(metrics_path),
+                "source_predictions_path": str(predictions_path),
+            },
+            metrics={},
+            artifact_paths=[],
+        )
+        log_artifacts(artifact_paths, artifact_path="reporting")
+
+    summary = {
+        "source_metrics": str(metrics_path),
+        "source_predictions": str(predictions_path),
+        "report_artifacts": [str(path) for path in artifact_paths[:4]],
+        "plot_artifacts": [str(path) for path in artifact_paths[4:]],
+    }
+    print("\nReporting artifact summary:")
     print(json.dumps(summary, indent=2))
     return summary
 
@@ -305,6 +392,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Path to full training configuration",
     )
 
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Generate consolidated reporting artifacts and plots",
+    )
+    report_parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/training.yaml",
+        help="Path to training configuration",
+    )
+
     return parser
 
 
@@ -318,6 +416,10 @@ def main() -> None:
 
     if args.command == "full":
         run_full_training(config_path=args.config)
+        return
+
+    if args.command == "report":
+        run_reporting(config_path=args.config)
         return
 
     raise ValueError(f"Unsupported command: {args.command}")

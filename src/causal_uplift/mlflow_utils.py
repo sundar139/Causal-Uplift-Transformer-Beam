@@ -24,12 +24,27 @@ def start_model_run(model_name: str, tags: dict[str, str] | None = None) -> Iter
         yield
 
 
+@contextmanager
+def start_named_run(run_name: str, tags: dict[str, str] | None = None) -> Iterator[None]:
+    with mlflow.start_run(run_name=run_name):
+        if tags:
+            mlflow.set_tags(tags)
+        yield
+
+
+def log_artifacts(artifact_paths: list[Path], artifact_path: str | None = None) -> None:
+    for artifact in artifact_paths:
+        mlflow.log_artifact(str(artifact), artifact_path=artifact_path)
+
+
 def log_run_payload(
     params: dict[str, int | float | str],
     metrics: dict[str, float],
     artifact_paths: list[Path],
 ) -> None:
-    mlflow.log_params(params)
-    mlflow.log_metrics(metrics)
-    for artifact in artifact_paths:
-        mlflow.log_artifact(str(artifact))
+    if params:
+        mlflow.log_params(params)
+    if metrics:
+        mlflow.log_metrics(metrics)
+    if artifact_paths:
+        log_artifacts(artifact_paths)
