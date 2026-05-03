@@ -3,10 +3,10 @@
   "python_package": "causal_uplift",
   "mlflow_tracking_uri": "sqlite:///mlflow.db",
   "experiment_name": "causal-uplift-training",
-  "generated_at_utc": "2026-05-03T04:01:24.342851+00:00",
+  "generated_at_utc": "2026-05-03T04:06:20.504434+00:00",
   "available_models": [
-    "ft_transformer",
     "s_learner_logistic",
+    "ft_transformer",
     "two_model_logistic",
     "t_learner_logistic"
   ],

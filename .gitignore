@@ -20,15 +20,22 @@ build/
 
 # MLflow outputs
 mlruns/
+
+# Preserve report and plot artifacts
 mlartifacts/
 
 # Keep directory structure, ignore generated files
 artifacts/*
 !artifacts/.gitkeep
 !artifacts/reports/
-!artifacts/reports/**
+artifacts/reports/*
+!artifacts/reports/.gitkeep
+!artifacts/reports/*.json
+!artifacts/reports/*.csv
 !artifacts/plots/
-!artifacts/plots/**
+artifacts/plots/*
+!artifacts/plots/.gitkeep
+!artifacts/plots/*.png
 models/*
 !models/.gitkeep
 data/raw/*
