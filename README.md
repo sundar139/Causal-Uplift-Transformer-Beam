@@ -472,3 +472,13 @@ Workflows:
 Deployment workflow is manual-only and uses Workload Identity Federation.
 
 Full training is intentionally excluded from CI to keep feedback fast, deterministic, and credential-free for pull requests.
+---
+
+## Author
+
+**Rohith Sundar Jonnalagadda**  
+[LinkedIn](https://www.linkedin.com/in/rohithsundarj/) · MS Computer Science, Kennesaw State University
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
