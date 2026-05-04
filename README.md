@@ -461,6 +461,35 @@ Sample batch input file:
 
 - examples/sample_batch.csv
 
+## Streamlit Dashboard Deployment
+
+Streamlit app path:
+
+- `app/streamlit_app.py`
+
+Streamlit Community Cloud settings:
+
+- Repository: `sundar139/Causal-Uplift-Transformer-Beam`
+- Branch: `main`
+- Main file path: `app/streamlit_app.py`
+
+Required API URL:
+
+- `CAUSAL_UPLIFT_API_URL=https://causal-uplift-api-sn6k6nocwq-uc.a.run.app`
+
+Local run command:
+
+```powershell
+$env:CAUSAL_UPLIFT_API_URL="https://causal-uplift-api-sn6k6nocwq-uc.a.run.app"
+uv run streamlit run app/streamlit_app.py
+```
+
+Deployed Streamlit URL placeholder:
+
+- `STREAMLIT_APP_URL_TO_BE_ADDED_AFTER_DEPLOYMENT`
+
+After Streamlit Community Cloud deployment, replace the placeholder with the deployed `streamlit.app` URL.
+
 ## CI/CD
 
 Workflows:

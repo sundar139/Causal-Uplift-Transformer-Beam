@@ -13,6 +13,7 @@ __pycache__/
 
 # Environment
 .env
+.streamlit/secrets.toml
 
 # Build artifacts
 dist/

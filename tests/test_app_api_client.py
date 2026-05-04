@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import sys
+import types
+
 import pytest
 from app import api_client
 from app.api_client import CausalUpliftApiClient, get_api_base_url
@@ -23,6 +26,26 @@ def test_get_api_base_url_uses_default(monkeypatch) -> None:
 def test_get_api_base_url_strips_trailing_slash(monkeypatch) -> None:
     monkeypatch.setenv("CAUSAL_UPLIFT_API_URL", "https://example.com/")
     assert get_api_base_url() == "https://example.com"
+
+
+def test_get_api_base_url_uses_streamlit_secret_when_env_missing(monkeypatch) -> None:
+    monkeypatch.delenv("CAUSAL_UPLIFT_API_URL", raising=False)
+    fake_streamlit = types.SimpleNamespace(
+        secrets={"CAUSAL_UPLIFT_API_URL": "https://secret.example/"}
+    )
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+
+    assert get_api_base_url() == "https://secret.example"
+
+
+def test_get_api_base_url_prefers_env_over_streamlit_secret(monkeypatch) -> None:
+    monkeypatch.setenv("CAUSAL_UPLIFT_API_URL", "https://env.example/")
+    fake_streamlit = types.SimpleNamespace(
+        secrets={"CAUSAL_UPLIFT_API_URL": "https://secret.example/"}
+    )
+    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+
+    assert get_api_base_url() == "https://env.example"
 
 
 def test_health_calls_expected_endpoint(monkeypatch) -> None:

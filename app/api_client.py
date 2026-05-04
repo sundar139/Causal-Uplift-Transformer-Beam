@@ -9,11 +9,32 @@ DEFAULT_API_BASE_URL = "http://127.0.0.1:8080"
 REQUEST_TIMEOUT_SECONDS = 15
 
 
+def _streamlit_secret_api_url() -> str | None:
+    try:
+        import streamlit as st
+    except Exception:
+        return None
+
+    try:
+        secret_value = st.secrets.get("CAUSAL_UPLIFT_API_URL")
+    except Exception:
+        return None
+
+    if isinstance(secret_value, str) and secret_value.strip():
+        return secret_value.strip()
+    return None
+
+
 def get_api_base_url() -> str:
-    url = os.getenv("CAUSAL_UPLIFT_API_URL", DEFAULT_API_BASE_URL).strip()
-    if not url:
-        return DEFAULT_API_BASE_URL
-    return url.rstrip("/")
+    env_url = os.getenv("CAUSAL_UPLIFT_API_URL", "").strip()
+    if env_url:
+        return env_url.rstrip("/")
+
+    secret_url = _streamlit_secret_api_url()
+    if secret_url:
+        return secret_url.rstrip("/")
+
+    return DEFAULT_API_BASE_URL
 
 
 class CausalUpliftApiClient:
