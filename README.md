@@ -1,3 +1,5 @@
+# Causal Uplift Transformer Beam
+
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/downloads/release/python-3120/)
 [![uv](https://img.shields.io/badge/uv-package%20manager-5A45FF.svg)](https://github.com/astral-sh/uv)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
@@ -8,8 +10,6 @@
 [![CI](https://github.com/sundar139/Causal-Uplift-Transformer-Beam/actions/workflows/ci.yml/badge.svg)](https://github.com/sundar139/Causal-Uplift-Transformer-Beam/actions/workflows/ci.yml)
 [![Docker Workflow](https://github.com/sundar139/Causal-Uplift-Transformer-Beam/actions/workflows/docker.yml/badge.svg)](https://github.com/sundar139/Causal-Uplift-Transformer-Beam/actions/workflows/docker.yml)
 [![Status](https://img.shields.io/badge/status-production--ready-success.svg)](https://github.com/sundar139/Causal-Uplift-Transformer-Beam)
-
-# Causal Uplift Transformer Beam
 
 Production-grade causal uplift modeling system with full-dataset training, transformer challengers, MLflow experiment tracking, Optuna tuning, Cloud Run deployment, Streamlit dashboard, and GitHub Actions CI/CD.
 
