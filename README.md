@@ -477,6 +477,12 @@ Required API URL:
 
 - `CAUSAL_UPLIFT_API_URL=https://causal-uplift-api-sn6k6nocwq-uc.a.run.app`
 
+Streamlit Cloud Secrets:
+
+```toml
+CAUSAL_UPLIFT_API_URL = "https://causal-uplift-api-sn6k6nocwq-uc.a.run.app"
+```
+
 Local run command:
 
 ```powershell
@@ -489,6 +495,8 @@ Deployed Streamlit URL placeholder:
 - `STREAMLIT_APP_URL_TO_BE_ADDED_AFTER_DEPLOYMENT`
 
 After Streamlit Community Cloud deployment, replace the placeholder with the deployed `streamlit.app` URL.
+
+If the app tries to call `127.0.0.1` on Streamlit Cloud, the API URL secret is missing or not being read.
 
 ## CI/CD
 

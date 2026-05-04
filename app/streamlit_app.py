@@ -225,6 +225,12 @@ def _about_section() -> None:
 def main() -> None:
     st.sidebar.title("Causal Uplift")
     base_url = st.sidebar.text_input("API Base URL", value=get_api_base_url()).strip().rstrip("/")
+    st.sidebar.caption(f"Active API: {base_url}")
+    if "127.0.0.1" in base_url or "localhost" in base_url:
+        st.sidebar.warning(
+            "Local API URL detected. This only works if FastAPI is running in the same environment."
+        )
+
     client = CausalUpliftApiClient(base_url=base_url)
 
     if st.sidebar.button("Check API Health"):

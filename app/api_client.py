@@ -5,18 +5,22 @@ from typing import Any
 
 import requests
 
-DEFAULT_API_BASE_URL = "http://127.0.0.1:8080"
+try:
+    import streamlit as st
+except Exception:  # pragma: no cover - import availability depends on runtime
+    st = None
+
+
+DEFAULT_API_BASE_URL = "https://causal-uplift-api-sn6k6nocwq-uc.a.run.app"
 REQUEST_TIMEOUT_SECONDS = 15
 
 
 def _streamlit_secret_api_url() -> str | None:
-    try:
-        import streamlit as st
-    except Exception:
+    if st is None:
         return None
 
     try:
-        secret_value = st.secrets.get("CAUSAL_UPLIFT_API_URL")
+        secret_value = st.secrets["CAUSAL_UPLIFT_API_URL"]
     except Exception:
         return None
 

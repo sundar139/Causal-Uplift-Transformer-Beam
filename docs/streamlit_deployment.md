@@ -24,6 +24,8 @@ Set the API URL as a Streamlit secret (preferred) or environment value:
 CAUSAL_UPLIFT_API_URL = "https://causal-uplift-api-sn6k6nocwq-uc.a.run.app"
 ```
 
+For Streamlit Community Cloud, add this value in app **Secrets**, then save and reboot the app.
+
 ## Manual Deployment Instructions
 
 1. Go to Streamlit Community Cloud.
@@ -36,6 +38,8 @@ CAUSAL_UPLIFT_API_URL = "https://causal-uplift-api-sn6k6nocwq-uc.a.run.app"
 8. Deploy.
 9. Open the app URL.
 10. Confirm the dashboard health panel shows the API as healthy.
+11. Confirm the sidebar shows active API as `https://causal-uplift-api-sn6k6nocwq-uc.a.run.app`.
+12. Confirm `/health` and `/model-info` calls succeed from the dashboard.
 
 ## Validation Checklist
 

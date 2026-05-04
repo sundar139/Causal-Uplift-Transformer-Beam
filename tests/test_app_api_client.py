@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import types
 
 import pytest
@@ -20,7 +19,8 @@ class DummyResponse:
 
 def test_get_api_base_url_uses_default(monkeypatch) -> None:
     monkeypatch.delenv("CAUSAL_UPLIFT_API_URL", raising=False)
-    assert get_api_base_url() == "http://127.0.0.1:8080"
+    monkeypatch.setattr(api_client, "st", None)
+    assert get_api_base_url() == "https://causal-uplift-api-sn6k6nocwq-uc.a.run.app"
 
 
 def test_get_api_base_url_strips_trailing_slash(monkeypatch) -> None:
@@ -33,7 +33,7 @@ def test_get_api_base_url_uses_streamlit_secret_when_env_missing(monkeypatch) ->
     fake_streamlit = types.SimpleNamespace(
         secrets={"CAUSAL_UPLIFT_API_URL": "https://secret.example/"}
     )
-    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+    monkeypatch.setattr(api_client, "st", fake_streamlit)
 
     assert get_api_base_url() == "https://secret.example"
 
@@ -43,9 +43,16 @@ def test_get_api_base_url_prefers_env_over_streamlit_secret(monkeypatch) -> None
     fake_streamlit = types.SimpleNamespace(
         secrets={"CAUSAL_UPLIFT_API_URL": "https://secret.example/"}
     )
-    monkeypatch.setitem(sys.modules, "streamlit", fake_streamlit)
+    monkeypatch.setattr(api_client, "st", fake_streamlit)
 
     assert get_api_base_url() == "https://env.example"
+
+
+def test_get_api_base_url_does_not_default_to_localhost(monkeypatch) -> None:
+    monkeypatch.delenv("CAUSAL_UPLIFT_API_URL", raising=False)
+    monkeypatch.setattr(api_client, "st", None)
+
+    assert get_api_base_url() != "http://127.0.0.1:8080"
 
 
 def test_health_calls_expected_endpoint(monkeypatch) -> None:
