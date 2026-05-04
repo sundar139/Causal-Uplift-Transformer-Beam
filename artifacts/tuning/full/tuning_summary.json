@@ -1,0 +1,20 @@
+{
+  "dataset_variant": "full",
+  "study_names": {
+    "ft_transformer": "uplift-full-tuning-ft-transformer",
+    "s_learner_logistic": "uplift-full-tuning-s-learner-logistic"
+  },
+  "n_trials_requested": {
+    "ft_transformer": 8,
+    "s_learner_logistic": 8
+  },
+  "n_trials_completed": {
+    "ft_transformer": 8,
+    "s_learner_logistic": 8
+  },
+  "best_model_family": "ft_transformer",
+  "best_qini_auc": 0.18452834251320419,
+  "best_params_path": "artifacts\\tuning\\full\\best_params.json",
+  "trials_path": "artifacts\\tuning\\full\\optuna_trials.csv",
+  "generated_at_utc": "2026-05-03T18:28:00.931351+00:00"
+}

@@ -1,15 +1,15 @@
 {
   "best_model": "s_learner_logistic",
   "selection_metric": "qini_auc",
-  "qini_auc": 0.1865987462877871,
-  "uplift_auc": 0.006039971793537997,
-  "policy_gain_top10": 0.008527157218906196,
-  "policy_gain_top20": 0.004894770008528863,
-  "policy_gain_top30": 0.0034617014664589827,
-  "treatment_response_auc": 0.9501663788353588,
-  "mean_predicted_uplift": 0.001181897052847895,
+  "qini_auc": 0.18662072984761657,
+  "uplift_auc": 0.006040690673702515,
+  "policy_gain_top10": 0.008544139491454252,
+  "policy_gain_top20": 0.004902817774730981,
+  "policy_gain_top30": 0.0034607747613456903,
+  "treatment_response_auc": 0.9502187139710698,
+  "mean_predicted_uplift": 0.0011698730625376637,
   "positive_uplift_rate": 1.0,
-  "generated_at_utc": "2026-05-03T06:51:05.303730+00:00",
+  "generated_at_utc": "2026-05-03T19:08:58.037211+00:00",
   "source_metrics_path": "artifacts\\evaluation\\full\\full_dataset_training_metrics.json",
   "source_predictions_path": "artifacts\\evaluation\\full\\full_dataset_test_predictions.csv"
 }

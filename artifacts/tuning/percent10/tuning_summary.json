@@ -9,12 +9,12 @@
     "s_learner_logistic": 20
   },
   "n_trials_completed": {
-    "ft_transformer": 20,
-    "s_learner_logistic": 20
+    "ft_transformer": 40,
+    "s_learner_logistic": 40
   },
   "best_model_family": "ft_transformer",
-  "best_qini_auc": 0.21135623579336912,
+  "best_qini_auc": 0.21147996692812898,
   "best_params_path": "artifacts\\tuning\\percent10\\best_params.json",
   "trials_path": "artifacts\\tuning\\percent10\\optuna_trials.csv",
-  "generated_at_utc": "2026-05-03T08:08:33.144151+00:00"
+  "generated_at_utc": "2026-05-03T15:02:58.261988+00:00"
 }

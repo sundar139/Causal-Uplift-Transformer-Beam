@@ -5,27 +5,27 @@
   "best_model_family": "ft_transformer",
   "models": {
     "ft_transformer": {
-      "best_value": 0.21135623579336912,
+      "best_value": 0.21147996692812898,
       "best_params": {
         "embedding_dim": 64,
         "num_layers": 3,
-        "num_heads": 4,
-        "dropout": 0.132506290405946,
+        "num_heads": 2,
+        "dropout": 0.18334927667733136,
         "hidden_dim": 128,
-        "learning_rate": 0.00018864638760480244,
-        "weight_decay": 8.148783022525741e-05,
+        "learning_rate": 0.00020311503013123748,
+        "weight_decay": 3.155210141316047e-05,
         "batch_size": 1024
       }
     },
     "s_learner_logistic": {
-      "best_value": 0.18626610262262067,
+      "best_value": 0.18638767959652625,
       "best_params": {
-        "C": 0.01243643121089768,
+        "C": 0.010002031468126185,
         "penalty": "l2",
         "class_weight": null,
         "max_iter": 500
       }
     }
   },
-  "generated_at_utc": "2026-05-03T08:08:33.144151+00:00"
+  "generated_at_utc": "2026-05-03T15:02:58.261988+00:00"
 }

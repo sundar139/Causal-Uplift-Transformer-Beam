@@ -1,0 +1,31 @@
+{
+  "dataset_variant": "full",
+  "selection_metric": "qini_auc",
+  "tie_breaker_metric": "policy_gain_top20",
+  "best_model_family": "ft_transformer",
+  "models": {
+    "ft_transformer": {
+      "best_value": 0.18452834251320419,
+      "best_params": {
+        "embedding_dim": 96,
+        "num_layers": 3,
+        "num_heads": 8,
+        "dropout": 0.11344700431418077,
+        "hidden_dim": 256,
+        "learning_rate": 0.0003109841018702908,
+        "weight_decay": 0.0001868764218857457,
+        "batch_size": 1024
+      }
+    },
+    "s_learner_logistic": {
+      "best_value": 0.18285109530640886,
+      "best_params": {
+        "C": 0.010596631524076696,
+        "penalty": "l2",
+        "class_weight": null,
+        "max_iter": 500
+      }
+    }
+  },
+  "generated_at_utc": "2026-05-03T18:28:00.931351+00:00"
+}
