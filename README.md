@@ -358,6 +358,45 @@ Screenshot placeholder:
 
 - Add dashboard screenshots to `assets/` when available.
 
+## CI/CD
+
+GitHub Actions workflows in this repository:
+
+- `ci.yml`: quality checks on push/PR to `main` plus manual dispatch
+- `docker.yml`: slim image build + container smoke test on push/PR to `main` plus manual dispatch
+- `cloud-run-deploy.yml`: manual-only Cloud Run deployment via workflow dispatch
+
+Required GitHub secrets for manual Cloud Run deployment:
+
+- `GCP_PROJECT_ID`
+- `GCP_REGION`
+- `GCP_ARTIFACT_REPO`
+- `GCP_CLOUD_RUN_SERVICE`
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`
+- `GCP_SERVICE_ACCOUNT`
+
+Why full training is not run in CI:
+
+- Full training, tuning, and reporting are compute-heavy and dataset-heavy workflows.
+- CI is scoped to fast, deterministic quality and serving-path validation.
+- This keeps pull request feedback quick and does not require live cloud credentials.
+
+Run the same CI checks locally:
+
+```bash
+uv sync --all-groups
+uv run ruff check src tests scripts app
+uv run python -m black --check src tests scripts app
+uv run python -m pytest
+uv run python scripts/check_production_bundle.py
+docker build -t causal-uplift-api:ci .
+docker run -d --name causal-uplift-api-ci -p 8092:8080 causal-uplift-api:ci
+curl http://127.0.0.1:8092/health
+curl http://127.0.0.1:8092/model-info
+docker stop causal-uplift-api-ci
+docker rm causal-uplift-api-ci
+```
+
 ## Quality checks
 
 ```bash

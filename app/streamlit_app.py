@@ -85,15 +85,15 @@ def _model_performance_section() -> None:
         st.warning("Ranking artifact not found at artifacts/reports/full/model_ranking.csv")
     else:
         st.subheader("Ranking Table")
-        st.dataframe(ranking_df, use_container_width=True)
+        st.dataframe(ranking_df, width="stretch")
 
     ranking_fig = model_ranking_chart(ranking_df)
     if ranking_fig is not None:
-        st.plotly_chart(ranking_fig, use_container_width=True)
+        st.plotly_chart(ranking_fig, width="stretch")
 
     gain_fig = policy_gain_chart(ranking_df)
     if gain_fig is not None:
-        st.plotly_chart(gain_fig, use_container_width=True)
+        st.plotly_chart(gain_fig, width="stretch")
 
     summary = load_champion_challenger_summary()
     st.subheader("Champion / Challenger Summary")
@@ -145,7 +145,7 @@ def _single_prediction_section(client: CausalUpliftApiClient) -> None:
 
         fig = prediction_probability_chart(prediction)
         if fig is not None:
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
 
 def _batch_prediction_section(client: CausalUpliftApiClient) -> None:
@@ -175,7 +175,7 @@ def _batch_prediction_section(client: CausalUpliftApiClient) -> None:
         st.error(f"Missing required columns: {missing}")
         return
 
-    st.dataframe(input_df.head(20), use_container_width=True)
+    st.dataframe(input_df.head(20), width="stretch")
 
     if st.button("Predict Batch", type="primary"):
         try:
@@ -188,7 +188,7 @@ def _batch_prediction_section(client: CausalUpliftApiClient) -> None:
         predictions = response.get("predictions", [])
         predictions_df = pd.DataFrame(predictions)
         st.subheader("Predictions")
-        st.dataframe(predictions_df, use_container_width=True)
+        st.dataframe(predictions_df, width="stretch")
 
         merged = pd.concat(
             [input_df.reset_index(drop=True), predictions_df.reset_index(drop=True)],

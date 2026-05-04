@@ -1,0 +1,102 @@
+name: cloud-run-deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  REGION: ${{ secrets.GCP_REGION }}
+  ARTIFACT_REPO: ${{ secrets.GCP_ARTIFACT_REPO }}
+  SERVICE: ${{ secrets.GCP_CLOUD_RUN_SERVICE }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          required=(
+            GCP_PROJECT_ID
+            GCP_REGION
+            GCP_ARTIFACT_REPO
+            GCP_CLOUD_RUN_SERVICE
+            GCP_WORKLOAD_IDENTITY_PROVIDER
+            GCP_SERVICE_ACCOUNT
+          )
+          for key in "${required[@]}"; do
+            if [ -z "${!key}" ]; then
+              echo "Missing required secret: ${key}"
+              exit 1
+            fi
+          done
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ secrets.GCP_REGION }}
+          GCP_ARTIFACT_REPO: ${{ secrets.GCP_ARTIFACT_REPO }}
+          GCP_CLOUD_RUN_SERVICE: ${{ secrets.GCP_CLOUD_RUN_SERVICE }}
+          GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker auth
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and push image
+        shell: bash
+        run: |
+          IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPO}/causal-uplift-api:${GITHUB_SHA}"
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+          docker build -t "${IMAGE}" .
+          docker push "${IMAGE}"
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "${SERVICE}" \
+            --image "${IMAGE}" \
+            --region "${REGION}" \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 2Gi \
+            --cpu 2 \
+            --min-instances 0 \
+            --max-instances 2 \
+            --port 8080
+
+      - name: Verify deployed service
+        shell: bash
+        run: |
+          URL=$(gcloud run services describe "${SERVICE}" --region "${REGION}" --format "value(status.url)")
+          echo "Deployed URL: ${URL}"
+          curl -sSf "${URL}/health" > /tmp/health.json
+          curl -sSf "${URL}/model-info" > /tmp/model_info.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          health = json.loads(Path('/tmp/health.json').read_text(encoding='utf-8'))
+          model_info = json.loads(Path('/tmp/model_info.json').read_text(encoding='utf-8'))
+
+          if not health.get('model_loaded'):
+              raise SystemExit(f"model_loaded is false after deploy: {health}")
+          if health.get('status') != 'ok':
+              raise SystemExit(f"health status is not ok after deploy: {health}")
+          if not model_info.get('model_name'):
+              raise SystemExit(f"model-info missing model_name: {model_info}")
+          print('Cloud Run verification checks passed')
+          PY

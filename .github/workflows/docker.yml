@@ -1,0 +1,61 @@
+name: docker
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  docker-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build slim image
+        run: docker build -t causal-uplift-api:ci .
+
+      - name: Start container
+        run: docker run -d --name causal-uplift-api-ci -p 8080:8080 causal-uplift-api:ci
+
+      - name: Wait for API startup
+        shell: bash
+        run: |
+          for _ in {1..20}; do
+            if curl -sSf http://127.0.0.1:8080/health > /tmp/health.json; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API did not become ready in time"
+          docker logs causal-uplift-api-ci || true
+          exit 1
+
+      - name: Validate health and model info
+        shell: bash
+        run: |
+          curl -sSf http://127.0.0.1:8080/health > /tmp/health.json
+          curl -sSf http://127.0.0.1:8080/model-info > /tmp/model_info.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          health = json.loads(Path('/tmp/health.json').read_text(encoding='utf-8'))
+          model_info = json.loads(Path('/tmp/model_info.json').read_text(encoding='utf-8'))
+
+          if not health.get('model_loaded'):
+              raise SystemExit(f"model_loaded is false: {health}")
+          if health.get('status') != 'ok':
+              raise SystemExit(f"health status is not ok: {health}")
+          if model_info.get('model_name') != 's_learner_logistic':
+              raise SystemExit(f"unexpected model_name: {model_info}")
+          print('Docker smoke checks passed')
+          PY
+
+      - name: Cleanup container
+        if: always()
+        run: |
+          docker stop causal-uplift-api-ci || true
+          docker rm causal-uplift-api-ci || true

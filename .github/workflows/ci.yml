@@ -2,8 +2,10 @@ name: ci
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["main"]
   pull_request:
+    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   quality:
@@ -12,22 +14,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Setup uv
         uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.12"
 
       - name: Install dependencies
         run: uv sync --all-groups
 
       - name: Ruff
-        run: uv run ruff check src tests
+        run: uv run ruff check src tests scripts app
 
       - name: Black format check
-        run: uv run black --check src tests
+        run: uv run python -m black --check src tests scripts app
 
       - name: Pytest
-        run: uv run pytest
+        run: uv run python -m pytest
+
+      - name: Production bundle contract
+        run: uv run python scripts/check_production_bundle.py

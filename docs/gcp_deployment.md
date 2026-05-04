@@ -96,6 +96,31 @@ If you want to target a local API instead, set:
 $env:CAUSAL_UPLIFT_API_URL="http://127.0.0.1:8080"
 ```
 
+## 10. GitHub Actions Deployment
+
+This repository includes a manual deployment workflow at `.github/workflows/cloud-run-deploy.yml`.
+
+Required repository secrets:
+
+- `GCP_PROJECT_ID`
+- `GCP_REGION`
+- `GCP_ARTIFACT_REPO`
+- `GCP_CLOUD_RUN_SERVICE`
+- `GCP_WORKLOAD_IDENTITY_PROVIDER`
+- `GCP_SERVICE_ACCOUNT`
+
+Authentication model:
+
+- The workflow uses Workload Identity Federation with `google-github-actions/auth`.
+- Do not store long-lived service account JSON keys in GitHub secrets.
+
+Manual dispatch steps:
+
+1. Open GitHub Actions.
+2. Select `cloud-run-deploy`.
+3. Click `Run workflow` on the target branch.
+4. Confirm deploy and post-deploy verification logs (`/health`, `/model-info`).
+
 ## Cost Controls
 
 - Use `--min-instances 0` so the service can scale to zero when idle.
@@ -144,7 +169,30 @@ Then inspect Cloud Run logs for startup errors:
 gcloud run services logs read SERVICE --region REGION --limit 100
 ```
 
+If this occurs after GitHub Actions deployment:
+
+- Confirm `models/production/*` files are included in the Docker context.
+- Re-run `scripts/check_production_bundle.py` locally before dispatching deployment.
+
 ### Slow Docker Build
 
 Production serving images should install only `requirements-serving.txt`.
 Do not run `uv sync` in the serving Docker image because it installs the full training stack.
+
+### Missing Secrets In GitHub Actions
+
+- The `cloud-run-deploy` workflow fails fast when required secrets are unset.
+- Verify all six `GCP_*` secrets are configured at repository level.
+
+### Docker Image Build Failure In Actions
+
+- Check the `docker build` step logs for missing files in context.
+- Confirm `.dockerignore` does not exclude `src/` or `models/production/`.
+
+### Artifact Registry Permission Failure
+
+- Ensure the federated service account has:
+  - `roles/artifactregistry.writer`
+  - `roles/run.admin`
+  - `roles/iam.serviceAccountUser`
+- Confirm the Workload Identity Provider principal binding allows GitHub repository access.
