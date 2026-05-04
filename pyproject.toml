@@ -23,6 +23,8 @@ dependencies = [
     "requests>=2.32.0",
     "scikit-learn>=1.5.0",
     "scikit-uplift>=0.5.1",
+    "streamlit>=1.45.0",
+    "plotly>=5.24.0",
     "torch>=2.8.0",
     "torchvision>=0.23.0",
     "tqdm>=4.67.3",
@@ -63,7 +65,7 @@ where = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests"]
+src = ["src", "tests", "scripts", "app"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]

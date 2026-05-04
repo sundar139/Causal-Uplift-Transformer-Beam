@@ -81,6 +81,21 @@ curl https://SERVICE_URL/health
 curl https://SERVICE_URL/model-info
 ```
 
+## 9. Streamlit Dashboard Client
+
+Use the deployed Cloud Run API as the backend for the local Streamlit client:
+
+```bash
+$env:CAUSAL_UPLIFT_API_URL="https://causal-uplift-api-sn6k6nocwq-uc.a.run.app"
+uv run streamlit run app/streamlit_app.py
+```
+
+If you want to target a local API instead, set:
+
+```bash
+$env:CAUSAL_UPLIFT_API_URL="http://127.0.0.1:8080"
+```
+
 ## Cost Controls
 
 - Use `--min-instances 0` so the service can scale to zero when idle.

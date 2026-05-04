@@ -326,12 +326,44 @@ Cloud Run deployment instructions are in `docs/gcp_deployment.md`.
 Model binaries in `models/production` are ignored by default unless explicitly added. Regenerate
 the bundle locally before building a container.
 
+## Streamlit dashboard
+
+Run the dashboard locally:
+
+```bash
+uv run streamlit run app/streamlit_app.py
+```
+
+Set API URL in PowerShell (Cloud Run):
+
+```powershell
+$env:CAUSAL_UPLIFT_API_URL="https://causal-uplift-api-sn6k6nocwq-uc.a.run.app"
+uv run streamlit run app/streamlit_app.py
+```
+
+Dashboard capabilities:
+
+- Overview with deployed champion model and key uplift metrics
+- Model performance section with ranking artifacts and policy gain charts when available
+- Single prediction interface for `f0` through `f11`
+- Batch prediction CSV upload with validation and downloadable predictions
+- About section documenting dataset, model families, and deployment architecture
+
+Batch CSV input format:
+
+- Required columns: `f0`, `f1`, `f2`, `f3`, `f4`, `f5`, `f6`, `f7`, `f8`, `f9`, `f10`, `f11`
+- Additional columns are ignored by the API client payload builder
+
+Screenshot placeholder:
+
+- Add dashboard screenshots to `assets/` when available.
+
 ## Quality checks
 
 ```bash
 uv run python scripts/verify_environment.py
-uv run ruff check src tests scripts
-uv run python -m black --check src tests scripts
+uv run ruff check src tests scripts app
+uv run python -m black --check src tests scripts app
 uv run python -m pytest
 uv run python scripts/check_production_bundle.py
 uv run python -m causal_uplift.data materialize --config configs/training.yaml
