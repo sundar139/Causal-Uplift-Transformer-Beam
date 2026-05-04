@@ -5,26 +5,48 @@ import io
 import pandas as pd
 import streamlit as st
 
-from app.api_client import CausalUpliftApiClient, get_api_base_url
-from app.charts import (
-    load_champion_challenger_summary,
-    load_model_ranking,
-    model_ranking_chart,
-    policy_gain_chart,
-    prediction_probability_chart,
-)
-from app.components import (
-    render_footer,
-    render_header,
-    render_metric_cards,
-    render_model_summary,
-    render_prediction_result,
-)
-from app.sample_inputs import (
-    build_example_dataframe,
-    get_default_feature_values,
-    get_feature_descriptions,
-)
+try:
+    from app.api_client import CausalUpliftApiClient, get_api_base_url
+    from app.charts import (
+        load_champion_challenger_summary,
+        load_model_ranking,
+        model_ranking_chart,
+        policy_gain_chart,
+        prediction_probability_chart,
+    )
+    from app.components import (
+        render_footer,
+        render_header,
+        render_metric_cards,
+        render_model_summary,
+        render_prediction_result,
+    )
+    from app.sample_inputs import (
+        build_example_dataframe,
+        get_default_feature_values,
+        get_feature_descriptions,
+    )
+except ModuleNotFoundError:
+    from api_client import CausalUpliftApiClient, get_api_base_url
+    from charts import (
+        load_champion_challenger_summary,
+        load_model_ranking,
+        model_ranking_chart,
+        policy_gain_chart,
+        prediction_probability_chart,
+    )
+    from components import (
+        render_footer,
+        render_header,
+        render_metric_cards,
+        render_model_summary,
+        render_prediction_result,
+    )
+    from sample_inputs import (
+        build_example_dataframe,
+        get_default_feature_values,
+        get_feature_descriptions,
+    )
 
 REQUIRED_FEATURES = [f"f{i}" for i in range(12)]
 
