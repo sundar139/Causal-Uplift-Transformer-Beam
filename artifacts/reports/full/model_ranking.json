@@ -8,7 +8,8 @@
     "policy_gain_top20":0.0049028178,
     "policy_gain_top30":0.0034607748,
     "mean_predicted_uplift":0.0011698731,
-    "positive_uplift_rate":1.0
+    "positive_uplift_rate":1.0,
+    "seed":null
   },
   {
     "model_name":"two_model_logistic",
@@ -19,7 +20,8 @@
     "policy_gain_top20":0.0048195291,
     "policy_gain_top30":0.0034298743,
     "mean_predicted_uplift":0.0009855684,
-    "positive_uplift_rate":0.9999577956
+    "positive_uplift_rate":0.9999577956,
+    "seed":null
   },
   {
     "model_name":"t_learner_logistic",
@@ -30,7 +32,8 @@
     "policy_gain_top20":0.0048195291,
     "policy_gain_top30":0.0034298743,
     "mean_predicted_uplift":0.0009855684,
-    "positive_uplift_rate":0.9999577956
+    "positive_uplift_rate":0.9999577956,
+    "seed":null
   },
   {
     "model_name":"ft_transformer",
@@ -41,6 +44,31 @@
     "policy_gain_top20":0.0048313134,
     "policy_gain_top30":0.0034945219,
     "mean_predicted_uplift":0.0006221275,
-    "positive_uplift_rate":0.9936242788
+    "positive_uplift_rate":0.9936242788,
+    "seed":null
+  },
+  {
+    "model_name":"ft_transformer_causal",
+    "treatment_response_auc":0.947789386,
+    "qini_auc":0.1383733762,
+    "uplift_auc":0.0044781112,
+    "policy_gain_top10":0.0026108028,
+    "policy_gain_top20":0.0031845841,
+    "policy_gain_top30":0.0034303636,
+    "mean_predicted_uplift":0.0129770166,
+    "positive_uplift_rate":0.7733686133,
+    "seed":2026.0
+  },
+  {
+    "model_name":"ft_transformer_causal_ensemble",
+    "treatment_response_auc":0.9521401525,
+    "qini_auc":0.1283747707,
+    "uplift_auc":0.0041540635,
+    "policy_gain_top10":0.0030394386,
+    "policy_gain_top20":0.0029497645,
+    "policy_gain_top30":0.0027410133,
+    "mean_predicted_uplift":0.020948648,
+    "positive_uplift_rate":0.9952001471,
+    "seed":null
   }
 ]

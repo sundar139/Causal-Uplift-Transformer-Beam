@@ -68,6 +68,7 @@ def test_reporting_artifact_contract_and_tie_breaker(tmp_path: Path) -> None:
     assert Path(report_paths["model_ranking_json"]).exists()
     assert Path(report_paths["best_model_summary_json"]).exists()
     assert Path(report_paths["experiment_manifest_json"]).exists()
+    assert Path(report_paths["champion_challenger_summary_json"]).exists()
 
     with Path(report_paths["best_model_summary_json"]).open("r", encoding="utf-8") as handle:
         best_summary = json.load(handle)

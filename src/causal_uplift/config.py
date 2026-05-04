@@ -70,6 +70,8 @@ class TrainingRuntimeConfig:
     weight_decay: float = 1e-4
     early_stopping_patience: int = 2
     num_workers: int = 0
+    checkpoint_metric: str = "validation_loss"
+    seeds: list[int] = field(default_factory=lambda: [42])
 
 
 @dataclass(slots=True)
@@ -86,8 +88,24 @@ class TransformerConfig:
 
 
 @dataclass(slots=True)
+class CausalTransformerConfig:
+    embedding_dim: int = 64
+    num_layers: int = 3
+    num_heads: int = 4
+    dropout: float = 0.15
+    hidden_dim: int = 128
+    use_layer_norm: bool = True
+    use_propensity_head: bool = True
+    factual_loss_weight: float = 1.0
+    propensity_loss_weight: float = 0.05
+    group_balance_weight: float = 0.20
+    positive_class_weighting: bool = True
+
+
+@dataclass(slots=True)
 class ArtifactConfig:
     best_model_name: str = "best_transformer_uplift.pt"
+    ensemble_model_name: str = "best_causal_ft_transformer_ensemble.json"
     metrics_name: str = "full_training_metrics.json"
     predictions_name: str = "test_predictions.csv"
 
@@ -98,6 +116,7 @@ class TrainingConfig:
     data: DataConfig = field(default_factory=DataConfig)
     training: TrainingRuntimeConfig = field(default_factory=TrainingRuntimeConfig)
     transformer: TransformerConfig = field(default_factory=TransformerConfig)
+    causal_transformer: CausalTransformerConfig = field(default_factory=CausalTransformerConfig)
     artifacts: ArtifactConfig = field(default_factory=ArtifactConfig)
     models: list[str] = field(
         default_factory=lambda: [
@@ -129,6 +148,7 @@ def _load_new_schema(payload: dict[str, object]) -> TrainingConfig:
     data_payload = payload.get("data", {})
     training_payload = payload.get("training", {})
     transformer_payload = payload.get("transformer", {})
+    causal_transformer_payload = payload.get("causal_transformer", {})
     artifacts_payload = payload.get("artifacts", {})
 
     data = DataConfig(
@@ -148,6 +168,8 @@ def _load_new_schema(payload: dict[str, object]) -> TrainingConfig:
         weight_decay=float(training_payload.get("weight_decay", 1e-4)),
         early_stopping_patience=int(training_payload.get("early_stopping_patience", 2)),
         num_workers=int(training_payload.get("num_workers", 0)),
+        checkpoint_metric=str(training_payload.get("checkpoint_metric", "validation_loss")),
+        seeds=[int(seed) for seed in training_payload.get("seeds", [42])],
     )
 
     transformer = TransformerConfig(
@@ -158,8 +180,29 @@ def _load_new_schema(payload: dict[str, object]) -> TrainingConfig:
         hidden_dim=int(transformer_payload.get("hidden_dim", 128)),
     )
 
+    causal_transformer = CausalTransformerConfig(
+        embedding_dim=int(causal_transformer_payload.get("embedding_dim", 64)),
+        num_layers=int(causal_transformer_payload.get("num_layers", 3)),
+        num_heads=int(causal_transformer_payload.get("num_heads", 4)),
+        dropout=float(causal_transformer_payload.get("dropout", 0.15)),
+        hidden_dim=int(causal_transformer_payload.get("hidden_dim", 128)),
+        use_layer_norm=bool(causal_transformer_payload.get("use_layer_norm", True)),
+        use_propensity_head=bool(causal_transformer_payload.get("use_propensity_head", True)),
+        factual_loss_weight=float(causal_transformer_payload.get("factual_loss_weight", 1.0)),
+        propensity_loss_weight=float(
+            causal_transformer_payload.get("propensity_loss_weight", 0.05)
+        ),
+        group_balance_weight=float(causal_transformer_payload.get("group_balance_weight", 0.20)),
+        positive_class_weighting=bool(
+            causal_transformer_payload.get("positive_class_weighting", True)
+        ),
+    )
+
     artifacts = ArtifactConfig(
         best_model_name=str(artifacts_payload.get("best_model_name", "best_transformer_uplift.pt")),
+        ensemble_model_name=str(
+            artifacts_payload.get("ensemble_model_name", "best_causal_ft_transformer_ensemble.json")
+        ),
         metrics_name=str(artifacts_payload.get("metrics_name", "full_training_metrics.json")),
         predictions_name=str(artifacts_payload.get("predictions_name", "test_predictions.csv")),
     )
@@ -174,6 +217,7 @@ def _load_new_schema(payload: dict[str, object]) -> TrainingConfig:
         data=data,
         training=training,
         transformer=transformer,
+        causal_transformer=causal_transformer,
         artifacts=artifacts,
         models=[str(name) for name in models],
     )
@@ -200,6 +244,8 @@ def _load_legacy_schema(payload: dict[str, object]) -> TrainingConfig:
         weight_decay=float(transformer_payload.get("weight_decay", 1e-4)),
         early_stopping_patience=int(transformer_payload.get("patience", 2)),
         num_workers=0,
+        checkpoint_metric="validation_loss",
+        seeds=[int(payload.get("random_state", 42))],
     )
 
     transformer = TransformerConfig(
@@ -220,6 +266,7 @@ def _load_legacy_schema(payload: dict[str, object]) -> TrainingConfig:
         data=data,
         training=training,
         transformer=transformer,
+        causal_transformer=CausalTransformerConfig(),
         artifacts=ArtifactConfig(),
         models=[str(name) for name in models],
     )

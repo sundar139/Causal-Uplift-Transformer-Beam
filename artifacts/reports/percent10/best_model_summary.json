@@ -9,7 +9,7 @@
   "treatment_response_auc": 0.9497194398825328,
   "mean_predicted_uplift": 0.001113266171724117,
   "positive_uplift_rate": 1.0,
-  "generated_at_utc": "2026-05-03T15:04:29.618715+00:00",
+  "generated_at_utc": "2026-05-04T05:48:16.797401+00:00",
   "source_metrics_path": "artifacts\\evaluation\\percent10\\full_training_metrics.json",
   "source_predictions_path": "artifacts\\evaluation\\percent10\\test_predictions.csv"
 }

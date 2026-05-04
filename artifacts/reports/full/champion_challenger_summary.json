@@ -1,0 +1,10 @@
+{
+  "champion_model": "s_learner_logistic",
+  "best_transformer_model": "ft_transformer",
+  "champion_qini_auc": 0.18662072984761657,
+  "best_transformer_qini_auc": 0.18093165966960012,
+  "qini_gap": 0.005689070178016453,
+  "transformer_won": false,
+  "recommendation": "Keep the current non-transformer champion; treat causal FT as a challenger.",
+  "generated_at_utc": "2026-05-04T07:33:05.527133+00:00"
+}

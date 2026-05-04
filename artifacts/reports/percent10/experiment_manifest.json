@@ -3,9 +3,10 @@
   "python_package": "causal_uplift",
   "mlflow_tracking_uri": "sqlite:///mlflow.db",
   "experiment_name": "causal-uplift-training",
-  "generated_at_utc": "2026-05-03T15:04:29.618715+00:00",
+  "generated_at_utc": "2026-05-04T05:48:16.799400+00:00",
   "available_models": [
     "s_learner_logistic",
+    "ft_transformer_causal",
     "two_model_logistic",
     "t_learner_logistic",
     "ft_transformer"
@@ -14,7 +15,8 @@
     "artifacts\\reports\\percent10\\model_ranking.csv",
     "artifacts\\reports\\percent10\\model_ranking.json",
     "artifacts\\reports\\percent10\\best_model_summary.json",
-    "artifacts\\reports\\percent10\\experiment_manifest.json"
+    "artifacts\\reports\\percent10\\experiment_manifest.json",
+    "artifacts\\reports\\percent10\\champion_challenger_summary.json"
   ],
   "plot_artifacts": [
     "artifacts\\plots\\percent10\\qini_curve.png",

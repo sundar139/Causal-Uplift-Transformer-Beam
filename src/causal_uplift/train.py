@@ -15,12 +15,19 @@ from causal_uplift.baselines import (
     TwoModelUpliftBaseline,
     UpliftPrediction,
 )
+from causal_uplift.causal_transformer import (
+    CausalFTPrediction,
+    CausalFTTransformerTrainer,
+    CausalFTTransformerUpliftModel,
+)
 from causal_uplift.config import AppConfig, TrainingConfig, load_training_config
 from causal_uplift.data import (
+    DatasetSplit,
     create_train_validation_test_split,
     dataset_variant_from_config,
     load_criteo_dataset,
     load_criteo_sample,
+    resolve_materialization_paths,
 )
 from causal_uplift.evaluate import (
     build_prediction_frame,
@@ -192,6 +199,69 @@ def _dataset_mlflow_tags(
         "row_count_validation": str(row_count_validation),
         "row_count_test": str(row_count_test),
     }
+
+
+def _split_from_processed_frame(
+    frame: pd.DataFrame,
+    training_config: TrainingConfig,
+) -> tuple[pd.DataFrame, pd.Series, pd.Series]:
+    ignored = {training_config.data.target_col, training_config.data.treatment_col, "split"}
+    feature_columns = [column for column in frame.columns if column not in ignored]
+    return (
+        frame[feature_columns].copy(),
+        frame[training_config.data.target_col].astype(int).reset_index(drop=True),
+        frame[training_config.data.treatment_col].astype(int).reset_index(drop=True),
+    )
+
+
+def _load_split_for_training(training_config: TrainingConfig) -> DatasetSplit:
+    processed_paths = resolve_materialization_paths(training_config)["processed_paths"]
+    if all(path.exists() for path in processed_paths.values()):
+        frames = {name: pd.read_parquet(path) for name, path in processed_paths.items()}
+        X_train, y_train, t_train = _split_from_processed_frame(frames["train"], training_config)
+        X_validation, y_validation, t_validation = _split_from_processed_frame(
+            frames["validation"], training_config
+        )
+        X_test, y_test, t_test = _split_from_processed_frame(frames["test"], training_config)
+        return DatasetSplit(
+            X_train=X_train,
+            X_validation=X_validation,
+            X_test=X_test,
+            y_train=y_train,
+            y_validation=y_validation,
+            y_test=y_test,
+            treatment_train=t_train,
+            treatment_validation=t_validation,
+            treatment_test=t_test,
+        )
+
+    dataset = load_criteo_dataset(
+        sample_size=training_config.data.sample_size,
+        percent10=training_config.data.percent10,
+        target_col=training_config.data.target_col,
+        treatment_col=training_config.data.treatment_col,
+    )
+    return create_train_validation_test_split(
+        dataset,
+        validation_size=training_config.data.validation_size,
+        test_size=training_config.data.test_size,
+        random_state=training_config.random_state,
+    )
+
+
+def _canonical_evaluation_names(training_config: TrainingConfig) -> tuple[str, str]:
+    return (
+        (
+            "full_dataset_training_metrics.json"
+            if not training_config.data.percent10
+            else "full_training_metrics.json"
+        ),
+        (
+            "full_dataset_test_predictions.csv"
+            if not training_config.data.percent10
+            else "test_predictions.csv"
+        ),
+    )
 
 
 def run_full_training(config_path: str | Path, use_best_params: bool = False) -> dict[str, object]:
@@ -427,6 +497,324 @@ def run_full_training(config_path: str | Path, use_best_params: bool = False) ->
     return summary
 
 
+def _average_predictions(predictions: list[CausalFTPrediction]) -> CausalFTPrediction:
+    treatment_probability = np.mean(
+        [prediction.treatment_probability for prediction in predictions],
+        axis=0,
+    )
+    control_probability = np.mean(
+        [prediction.control_probability for prediction in predictions],
+        axis=0,
+    )
+    return CausalFTPrediction(
+        treatment_probability=treatment_probability,
+        control_probability=control_probability,
+        uplift=treatment_probability - control_probability,
+    )
+
+
+def _merge_causal_results_into_canonical_artifacts(
+    evaluation_dir: Path,
+    training_config: TrainingConfig,
+    causal_results: list[dict[str, float | str]],
+    causal_prediction_frames: list[pd.DataFrame],
+) -> tuple[Path, Path]:
+    metrics_name, predictions_name = _canonical_evaluation_names(training_config)
+    metrics_path = evaluation_dir / metrics_name
+    predictions_path = evaluation_dir / predictions_name
+    causal_model_names = {str(row["model_name"]) for row in causal_results}
+
+    existing_rows: list[dict[str, float | str]] = []
+    if metrics_path.exists():
+        with metrics_path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        if isinstance(payload, dict) and isinstance(payload.get("ranking"), list):
+            existing_rows = [
+                row
+                for row in payload["ranking"]
+                if str(row.get("model_name", "")) not in causal_model_names
+            ]
+    ranking = _rank_models([*existing_rows, *causal_results])
+
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    with metrics_path.open("w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "best_model": str(ranking.iloc[0]["model_name"]),
+                "dataset_variant": dataset_variant_from_config(training_config),
+                "data_percent10": training_config.data.percent10,
+                "selection_metric": "qini_auc",
+                "tie_breaker": "policy_gain_top20",
+                "ranking": ranking.to_dict(orient="records"),
+            },
+            handle,
+            indent=2,
+        )
+
+    existing_predictions = pd.DataFrame()
+    if predictions_path.exists():
+        existing_predictions = pd.read_csv(predictions_path)
+        if "model_name" in existing_predictions.columns:
+            existing_predictions = existing_predictions[
+                ~existing_predictions["model_name"].astype(str).isin(causal_model_names)
+            ]
+    merged_predictions = pd.concat(
+        [existing_predictions, *causal_prediction_frames],
+        ignore_index=True,
+    )
+    merged_predictions.to_csv(predictions_path, index=False)
+    return metrics_path, predictions_path
+
+
+def run_causal_ft_training(config_path: str | Path) -> dict[str, object]:
+    app_config = AppConfig.from_env()
+    training_config = load_training_config(config_path)
+    initialize_mlflow(app_config)
+
+    split = _load_split_for_training(training_config)
+    dataset_tags = _dataset_mlflow_tags(
+        training_config,
+        row_count_train=len(split.X_train),
+        row_count_validation=len(split.X_validation),
+        row_count_test=len(split.X_test),
+    )
+    preprocessor = NumericFeaturePreprocessor()
+    X_train_np = preprocessor.fit_transform(split.X_train)
+    X_validation_np = preprocessor.transform(split.X_validation)
+    X_test_np = preprocessor.transform(split.X_test)
+
+    y_train = split.y_train.reset_index(drop=True)
+    y_validation = split.y_validation.reset_index(drop=True)
+    y_test = split.y_test.reset_index(drop=True)
+    t_train = split.treatment_train.reset_index(drop=True)
+    t_validation = split.treatment_validation.reset_index(drop=True)
+    t_test = split.treatment_test.reset_index(drop=True)
+
+    variant = dataset_variant_from_config(training_config)
+    variant_paths = _build_variant_paths(app_config, training_config)
+    evaluation_dir = variant_paths["evaluation_dir"]
+    evaluation_dir.mkdir(parents=True, exist_ok=True)
+
+    causal_results: list[dict[str, float | str]] = []
+    causal_prediction_frames: list[pd.DataFrame] = []
+    seed_predictions: list[CausalFTPrediction] = []
+    seed_checkpoint_paths: list[Path] = []
+    best_seed_score: tuple[float, float] | None = None
+    best_seed_checkpoint: Path | None = None
+    best_seed_result: dict[str, float | str] | None = None
+    best_seed_prediction_frame: pd.DataFrame | None = None
+
+    for seed in training_config.training.seeds:
+        model = CausalFTTransformerUpliftModel(
+            num_features=X_train_np.shape[1],
+            embedding_dim=training_config.causal_transformer.embedding_dim,
+            num_layers=training_config.causal_transformer.num_layers,
+            num_heads=training_config.causal_transformer.num_heads,
+            dropout=training_config.causal_transformer.dropout,
+            hidden_dim=training_config.causal_transformer.hidden_dim,
+            use_layer_norm=training_config.causal_transformer.use_layer_norm,
+            use_propensity_head=training_config.causal_transformer.use_propensity_head,
+        )
+        trainer = CausalFTTransformerTrainer(
+            model=model,
+            learning_rate=training_config.training.learning_rate,
+            weight_decay=training_config.training.weight_decay,
+            batch_size=training_config.training.batch_size,
+            epochs=training_config.training.max_epochs,
+            patience=training_config.training.early_stopping_patience,
+            num_workers=training_config.training.num_workers,
+            random_state=seed,
+            factual_loss_weight=training_config.causal_transformer.factual_loss_weight,
+            propensity_loss_weight=training_config.causal_transformer.propensity_loss_weight,
+            group_balance_weight=training_config.causal_transformer.group_balance_weight,
+            positive_class_weighting=training_config.causal_transformer.positive_class_weighting,
+            checkpoint_metric=training_config.training.checkpoint_metric,
+        )
+        checkpoint_path = Path(app_config.model_dir) / f"causal_ft_seed_{seed}_{variant}.pt"
+        with start_named_run(
+            run_name=f"causal-ft-{variant}-seed-{seed}",
+            tags={
+                "project": "causal-uplift-transformer-beam",
+                "run_type": "training",
+                "model_family": "ft_transformer_causal",
+                "seed": str(seed),
+                **dataset_tags,
+            },
+        ):
+            validation_metrics = trainer.fit(
+                X_train=X_train_np,
+                y_train=y_train.to_numpy(dtype=np.float32),
+                treatment_train=t_train.to_numpy(dtype=np.float32),
+                X_validation=X_validation_np,
+                y_validation=y_validation.to_numpy(dtype=np.float32),
+                treatment_validation=t_validation.to_numpy(dtype=np.float32),
+                checkpoint_path=checkpoint_path,
+            )
+            prediction = trainer.predict(X_test_np)
+            metrics = compute_uplift_metrics(
+                y_true=y_test.to_numpy(),
+                treatment=t_test.to_numpy(),
+                uplift=prediction.uplift,
+                treatment_proba=prediction.treatment_probability,
+            )
+            log_run_payload(
+                params={
+                    "seed": seed,
+                    "dataset_variant": variant,
+                    "embedding_dim": training_config.causal_transformer.embedding_dim,
+                    "num_layers": training_config.causal_transformer.num_layers,
+                    "num_heads": training_config.causal_transformer.num_heads,
+                    "dropout": training_config.causal_transformer.dropout,
+                    "hidden_dim": training_config.causal_transformer.hidden_dim,
+                    "learning_rate": training_config.training.learning_rate,
+                    "weight_decay": training_config.training.weight_decay,
+                    "batch_size": training_config.training.batch_size,
+                    "max_epochs": training_config.training.max_epochs,
+                    "factual_loss_weight": (training_config.causal_transformer.factual_loss_weight),
+                    "propensity_loss_weight": (
+                        training_config.causal_transformer.propensity_loss_weight
+                    ),
+                    "group_balance_weight": (
+                        training_config.causal_transformer.group_balance_weight
+                    ),
+                },
+                metrics={
+                    "best_validation_qini_auc": validation_metrics.get("qini_auc", 0.0),
+                    "test_qini_auc": metrics["qini_auc"],
+                    "test_uplift_auc": metrics["uplift_auc"],
+                    "test_policy_gain_top20": metrics["policy_gain_top20"],
+                    "treatment_response_auc": metrics["treatment_response_auc"],
+                },
+                artifact_paths=[checkpoint_path],
+            )
+
+        seed_checkpoint_paths.append(checkpoint_path)
+        seed_predictions.append(prediction)
+        model_name = "ft_transformer_causal"
+        seed_result: dict[str, float | str] = {"model_name": model_name, "seed": seed, **metrics}
+        seed_prediction_frame = build_prediction_frame(
+            y_true=y_test.to_numpy(),
+            treatment=t_test.to_numpy(),
+            uplift=prediction.uplift,
+            treatment_proba=prediction.treatment_probability,
+            control_proba=prediction.control_probability,
+            model_name=model_name,
+        )
+        seed_score = (
+            validation_metrics.get("qini_auc", 0.0),
+            validation_metrics.get("policy_gain_top20", 0.0),
+        )
+        if best_seed_score is None or seed_score > best_seed_score:
+            best_seed_score = seed_score
+            best_seed_checkpoint = checkpoint_path
+            best_seed_result = seed_result
+            best_seed_prediction_frame = seed_prediction_frame
+
+    if best_seed_checkpoint is not None:
+        best_model_path = Path(app_config.model_dir) / training_config.artifacts.best_model_name
+        best_model_path.write_bytes(best_seed_checkpoint.read_bytes())
+    if best_seed_result is not None and best_seed_prediction_frame is not None:
+        causal_results.append(best_seed_result)
+        causal_prediction_frames.append(best_seed_prediction_frame)
+
+    if len(seed_predictions) > 1:
+        ensemble_prediction = _average_predictions(seed_predictions)
+        ensemble_metrics = compute_uplift_metrics(
+            y_true=y_test.to_numpy(),
+            treatment=t_test.to_numpy(),
+            uplift=ensemble_prediction.uplift,
+            treatment_proba=ensemble_prediction.treatment_probability,
+        )
+        ensemble_frame = build_prediction_frame(
+            y_true=y_test.to_numpy(),
+            treatment=t_test.to_numpy(),
+            uplift=ensemble_prediction.uplift,
+            treatment_proba=ensemble_prediction.treatment_probability,
+            control_proba=ensemble_prediction.control_probability,
+            model_name="ft_transformer_causal_ensemble",
+        )
+        ensemble_metadata_path = (
+            Path(app_config.model_dir) / training_config.artifacts.ensemble_model_name
+        )
+        with ensemble_metadata_path.open("w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "model_name": "ft_transformer_causal_ensemble",
+                    "dataset_variant": variant,
+                    "seeds": training_config.training.seeds,
+                    "checkpoint_paths": [str(path) for path in seed_checkpoint_paths],
+                },
+                handle,
+                indent=2,
+            )
+        ensemble_predictions_path = (
+            evaluation_dir / "ft_transformer_causal_ensemble_predictions.csv"
+        )
+        ensemble_frame.to_csv(ensemble_predictions_path, index=False)
+        with start_named_run(
+            run_name=f"causal-ft-{variant}-ensemble",
+            tags={
+                "project": "causal-uplift-transformer-beam",
+                "run_type": "training",
+                "model_family": "ft_transformer_causal_ensemble",
+                "seeds": ",".join(str(seed) for seed in training_config.training.seeds),
+                **dataset_tags,
+            },
+        ):
+            log_run_payload(
+                params={
+                    "dataset_variant": variant,
+                    "seeds": ",".join(str(seed) for seed in training_config.training.seeds),
+                },
+                metrics={
+                    "ensemble_test_qini_auc": ensemble_metrics["qini_auc"],
+                    "ensemble_test_policy_gain_top20": ensemble_metrics["policy_gain_top20"],
+                },
+                artifact_paths=[ensemble_metadata_path, ensemble_predictions_path],
+            )
+        causal_results.append({"model_name": "ft_transformer_causal_ensemble", **ensemble_metrics})
+        causal_prediction_frames.append(ensemble_frame)
+
+    causal_ranking = _rank_models(causal_results)
+    causal_metrics_path = evaluation_dir / training_config.artifacts.metrics_name
+    causal_predictions_path = evaluation_dir / training_config.artifacts.predictions_name
+    with causal_metrics_path.open("w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "best_model": str(causal_ranking.iloc[0]["model_name"]),
+                "dataset_variant": variant,
+                "selection_metric": "qini_auc",
+                "tie_breaker": "policy_gain_top20",
+                "ranking": causal_ranking.to_dict(orient="records"),
+            },
+            handle,
+            indent=2,
+        )
+    pd.concat(causal_prediction_frames, ignore_index=True).to_csv(
+        causal_predictions_path,
+        index=False,
+    )
+    canonical_metrics_path, canonical_predictions_path = (
+        _merge_causal_results_into_canonical_artifacts(
+            evaluation_dir,
+            training_config,
+            causal_results,
+            causal_prediction_frames,
+        )
+    )
+
+    summary = {
+        "dataset_variant": variant,
+        "causal_metrics_path": str(causal_metrics_path),
+        "causal_predictions_path": str(causal_predictions_path),
+        "canonical_metrics_path": str(canonical_metrics_path),
+        "canonical_predictions_path": str(canonical_predictions_path),
+        "ranking": causal_ranking.to_dict(orient="records"),
+    }
+    print(json.dumps(summary, indent=2))
+    return summary
+
+
 def run_reporting(config_path: str | Path) -> dict[str, object]:
     app_config = AppConfig.from_env()
     training_config = load_training_config(config_path)
@@ -466,6 +854,7 @@ def run_reporting(config_path: str | Path) -> dict[str, object]:
         report_paths["model_ranking_json"],
         report_paths["best_model_summary_json"],
         report_paths["experiment_manifest_json"],
+        report_paths["champion_challenger_summary_json"],
         plot_outputs["qini_curve"],
         plot_outputs["uplift_curve"],
         plot_outputs["policy_gain_curve"],
@@ -515,8 +904,8 @@ def run_reporting(config_path: str | Path) -> dict[str, object]:
     summary = {
         "source_metrics": str(metrics_path),
         "source_predictions": str(predictions_path),
-        "report_artifacts": [str(path) for path in artifact_paths[:4]],
-        "plot_artifacts": [str(path) for path in artifact_paths[4:]],
+        "report_artifacts": [str(path) for path in artifact_paths[:5]],
+        "plot_artifacts": [str(path) for path in artifact_paths[5:]],
     }
     print("\nReporting artifact summary:")
     print(json.dumps(summary, indent=2))
@@ -548,6 +937,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Use variant-specific Optuna best_params.json for supported models",
     )
 
+    causal_parser = subparsers.add_parser(
+        "causal-ft",
+        help="Train causal two-head FT-Transformer uplift challenger",
+    )
+    causal_parser.add_argument(
+        "--config",
+        type=str,
+        default="configs/training_causal_ft.yaml",
+        help="Path to causal FT training configuration",
+    )
+
     report_parser = subparsers.add_parser(
         "report",
         help="Generate consolidated reporting artifacts and plots",
@@ -572,6 +972,10 @@ def main() -> None:
 
     if args.command == "full":
         run_full_training(config_path=args.config, use_best_params=args.use_best_params)
+        return
+
+    if args.command == "causal-ft":
+        run_causal_ft_training(config_path=args.config)
         return
 
     if args.command == "report":

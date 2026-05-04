@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from causal_uplift.champion import compare_against_current_champion, rank_models_by_policy
+
 
 @dataclass(slots=True)
 class ReportingArtifacts:
@@ -14,6 +16,7 @@ class ReportingArtifacts:
     model_ranking_json: Path
     best_model_summary_json: Path
     experiment_manifest_json: Path
+    champion_challenger_summary_json: Path
 
 
 def _utc_timestamp() -> str:
@@ -53,16 +56,7 @@ def load_predictions_frame(predictions_path: str | Path) -> pd.DataFrame:
 
 
 def build_ranked_model_comparison(metrics_rows: list[dict[str, float | str]]) -> pd.DataFrame:
-    frame = pd.DataFrame(metrics_rows)
-    required = {"model_name", "qini_auc", "policy_gain_top20"}
-    missing = required.difference(frame.columns)
-    if missing:
-        raise ValueError(f"Missing required metric columns: {sorted(missing)}")
-
-    return frame.sort_values(
-        by=["qini_auc", "policy_gain_top20"],
-        ascending=[False, False],
-    ).reset_index(drop=True)
+    return rank_models_by_policy(metrics_rows)
 
 
 def select_best_model(ranking: pd.DataFrame) -> pd.Series:
@@ -126,6 +120,7 @@ def _experiment_manifest(
             str(report_artifacts.model_ranking_json),
             str(report_artifacts.best_model_summary_json),
             str(report_artifacts.experiment_manifest_json),
+            str(report_artifacts.champion_challenger_summary_json),
         ],
         "plot_artifacts": [str(path) for path in plot_artifacts],
         "notes": "Best model selected by qini_auc with policy_gain_top20 tie-breaker.",
@@ -156,6 +151,7 @@ def generate_reporting_artifacts(
         model_ranking_json=target_dir / "model_ranking.json",
         best_model_summary_json=target_dir / "best_model_summary.json",
         experiment_manifest_json=target_dir / "experiment_manifest.json",
+        champion_challenger_summary_json=target_dir / "champion_challenger_summary.json",
     )
 
     ranking.to_csv(artifacts.model_ranking_csv, index=False)
@@ -164,6 +160,10 @@ def generate_reporting_artifacts(
     summary = _best_model_summary(best, predictions, source_metrics_path, source_predictions_path)
     with artifacts.best_model_summary_json.open("w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2)
+
+    champion_challenger_summary = compare_against_current_champion(ranking)
+    with artifacts.champion_challenger_summary_json.open("w", encoding="utf-8") as handle:
+        json.dump(champion_challenger_summary, handle, indent=2)
 
     manifest = _experiment_manifest(
         ranking=ranking,
@@ -186,5 +186,6 @@ def generate_reporting_artifacts(
             "model_ranking_json": artifacts.model_ranking_json,
             "best_model_summary_json": artifacts.best_model_summary_json,
             "experiment_manifest_json": artifacts.experiment_manifest_json,
+            "champion_challenger_summary_json": artifacts.champion_challenger_summary_json,
         },
     }

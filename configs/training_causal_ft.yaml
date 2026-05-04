@@ -1,0 +1,38 @@
+random_state: 42
+dataset_variant: percent10
+
+data:
+  sample_size: 0
+  percent10: true
+  test_size: 0.2
+  validation_size: 0.2
+  target_col: conversion
+  treatment_col: treatment
+
+training:
+  batch_size: 2048
+  max_epochs: 16
+  learning_rate: 0.0005
+  weight_decay: 0.0001
+  early_stopping_patience: 4
+  num_workers: 0
+  checkpoint_metric: qini_auc
+  seeds: [42]
+
+causal_transformer:
+  embedding_dim: 64
+  num_layers: 3
+  num_heads: 4
+  dropout: 0.15
+  hidden_dim: 128
+  use_layer_norm: true
+  use_propensity_head: true
+  factual_loss_weight: 1.0
+  propensity_loss_weight: 0.05
+  group_balance_weight: 0.20
+  positive_class_weighting: true
+
+artifacts:
+  best_model_name: best_causal_ft_transformer_percent10.pt
+  metrics_name: causal_ft_metrics.json
+  predictions_name: causal_ft_predictions.csv

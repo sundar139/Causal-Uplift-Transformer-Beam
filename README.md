@@ -92,6 +92,40 @@ Tuning artifacts:
 
 Optuna uses local SQLite storage by default at `optuna_studies.db`; MLflow remains SQLite-backed at `mlflow.db`.
 
+## Causal FT-Transformer Challenger
+
+The original FT-Transformer is an S-learner style model: treatment is appended as an input feature
+and the model learns one factual outcome surface. The causal FT-Transformer challenger uses a shared
+feature encoder with separate control and treatment heads, so it directly estimates `mu0(x)` and
+`mu1(x)`. It also supports a propensity head, group-balanced factual loss, positive-class weighting,
+Qini-based checkpointing, and multi-seed ensembling.
+
+Validate on percent10:
+
+```bash
+uv run python -m causal_uplift.train causal-ft --config configs/training_causal_ft.yaml
+uv run python -m causal_uplift.train report --config configs/training.yaml
+```
+
+Train the full challenger:
+
+```bash
+uv run python -m causal_uplift.train causal-ft --config configs/training_causal_ft_full.yaml
+uv run python -m causal_uplift.train report --config configs/training_full.yaml
+```
+
+Champion selection remains honest: models are ranked by `qini_auc`, with `policy_gain_top20` as the
+tie-breaker. If logistic still wins, deployment should keep the logistic champion and treat causal FT
+as a challenger. Deployment resumes only after the champion/challenger report supports the selected
+production model.
+
+Challenger outputs:
+
+- artifacts/evaluation/percent10/causal_ft_metrics.json
+- artifacts/evaluation/full/causal_ft_metrics.json
+- artifacts/evaluation/full/causal_ft_predictions.csv
+- artifacts/reports/full/champion_challenger_summary.json
+
 ## Dataset modes
 
 This project supports two dataset modes with separate local parquet, profile, and evaluation paths:
