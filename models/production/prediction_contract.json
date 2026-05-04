@@ -1,0 +1,20 @@
+{
+  "endpoint": "/predict_uplift",
+  "input_format": {
+    "features": {
+      "feature_name": "numeric_value"
+    }
+  },
+  "output_format": {
+    "request_id": "string",
+    "model_name": "string",
+    "model_version": "created_at_utc timestamp",
+    "prediction": {
+      "treatment_probability": "float",
+      "control_probability": "float",
+      "uplift": "float",
+      "recommend_treatment": "boolean"
+    }
+  },
+  "example_request_path": "models/production/example_request.json"
+}

@@ -1,0 +1,38 @@
+{
+  "feature_names": [
+    "f0",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11"
+  ],
+  "feature_count": 12,
+  "required_columns": [
+    "f0",
+    "f1",
+    "f2",
+    "f3",
+    "f4",
+    "f5",
+    "f6",
+    "f7",
+    "f8",
+    "f9",
+    "f10",
+    "f11"
+  ],
+  "target_column": "conversion",
+  "treatment_column": "treatment",
+  "dtype_policy": {
+    "accepted": "numeric values coercible to float",
+    "missing": "rejected for required feature columns",
+    "invalid": "rejected when a value cannot be parsed as a finite number"
+  }
+}

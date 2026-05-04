@@ -54,6 +54,9 @@ artifacts/tuning/**
 !artifacts/tuning/**/*.csv
 models/*
 !models/.gitkeep
+!models/production/
+models/production/*
+!models/production/*.json
 data/raw/*
 !data/raw/.gitkeep
 data/processed/*

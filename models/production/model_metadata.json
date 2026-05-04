@@ -1,0 +1,51 @@
+{
+  "project_name": "causal-uplift-transformer-beam",
+  "champion_model": "s_learner_logistic",
+  "selection_metric": "qini_auc",
+  "qini_auc": 0.18662072984761657,
+  "uplift_auc": 0.006040690673702515,
+  "policy_gain_top10": 0.008544139491454252,
+  "policy_gain_top20": 0.004902817774730981,
+  "policy_gain_top30": 0.0034607747613456903,
+  "treatment_response_auc": 0.9502187139710698,
+  "dataset_variant": "full",
+  "training_config": {
+    "path": "configs\\training_full.yaml",
+    "payload": {
+      "random_state": 42,
+      "data": {
+        "sample_size": 0,
+        "percent10": false,
+        "test_size": 0.2,
+        "validation_size": 0.2,
+        "target_col": "conversion",
+        "treatment_col": "treatment"
+      },
+      "training": {
+        "batch_size": 4096,
+        "max_epochs": 20,
+        "learning_rate": 0.0005,
+        "weight_decay": 0.0001,
+        "early_stopping_patience": 4,
+        "num_workers": 0
+      },
+      "transformer": {
+        "embedding_dim": 64,
+        "num_layers": 3,
+        "num_heads": 4,
+        "dropout": 0.15,
+        "hidden_dim": 128
+      },
+      "artifacts": {
+        "best_model_name": "best_transformer_uplift_full.pt",
+        "metrics_name": "full_dataset_training_metrics.json",
+        "predictions_name": "full_dataset_test_predictions.csv"
+      }
+    }
+  },
+  "created_at_utc": "2026-05-04T04:10:52.613852+00:00",
+  "source_report_path": "artifacts\\reports\\full\\best_model_summary.json",
+  "source_model_path": "models\\s_learner_logistic.joblib",
+  "source_predictions_path": "artifacts\\evaluation\\full\\full_dataset_test_predictions.csv",
+  "source_metrics_path": "artifacts\\evaluation\\full\\full_dataset_training_metrics.json"
+}

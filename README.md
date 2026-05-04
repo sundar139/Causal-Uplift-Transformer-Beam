@@ -196,27 +196,58 @@ Open <http://127.0.0.1:5000>.
 
 ## API
 
-Run the service:
+Build the production inference bundle first. The bundle uses the champion selected in
+`artifacts/reports/full/best_model_summary.json`; it does not assume the transformer is the
+production model.
 
 ```bash
-uv run uvicorn causal_uplift.serve:app --reload --port 8000
+uv run python scripts/build_inference_bundle.py --config configs/training_full.yaml
+```
+
+Run the service locally:
+
+```bash
+uv run uvicorn causal_uplift.serve:app --host 127.0.0.1 --port 8080
 ```
 
 Endpoints:
 
+- GET /
 - GET /health
 - GET /version
+- GET /model-info
 - POST /predict_uplift
+- POST /predict_batch
 
 Example request:
 
 ```json
 {
-  "rows": [
-    {"features": [0.1, 0.2, 0.3, 0.4]}
-  ]
+  "features": {
+    "f0": 0.1,
+    "f1": 0.2
+  }
 }
 ```
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8080/health
+curl http://127.0.0.1:8080/model-info
+```
+
+Docker build and run:
+
+```bash
+docker build -t causal-uplift-api:local .
+docker run --rm -p 8080:8080 causal-uplift-api:local
+```
+
+Cloud Run deployment instructions are in `docs/gcp_deployment.md`.
+
+Model binaries in `models/production` are ignored by default unless explicitly added. Regenerate
+the bundle locally before building a container.
 
 ## Quality checks
 
@@ -238,4 +269,5 @@ uv run python -m causal_uplift.train full --config configs/training_full.yaml
 uv run python -m causal_uplift.tuning --config configs/tuning_full.yaml
 uv run python -m causal_uplift.train full --config configs/training_full.yaml --use-best-params
 uv run python -m causal_uplift.train report --config configs/training_full.yaml
+uv run python scripts/build_inference_bundle.py --config configs/training_full.yaml
 ```
