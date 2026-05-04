@@ -236,12 +236,13 @@ production model.
 
 ```bash
 uv run python scripts/build_inference_bundle.py --config configs/training_full.yaml
+uv run python scripts/check_production_bundle.py
 ```
 
 Run the service locally:
 
 ```bash
-uv run uvicorn causal_uplift.serve:app --host 127.0.0.1 --port 8080
+uv run python -m uvicorn causal_uplift.serve:app --host 127.0.0.1 --port 8080
 ```
 
 Endpoints:
@@ -271,11 +272,53 @@ curl http://127.0.0.1:8080/health
 curl http://127.0.0.1:8080/model-info
 ```
 
-Docker build and run:
+Slim serving Docker build and run:
 
 ```bash
 docker build -t causal-uplift-api:local .
-docker run --rm -p 8080:8080 causal-uplift-api:local
+docker run --rm -p 8091:8080 causal-uplift-api:local
+curl http://127.0.0.1:8091/health
+curl http://127.0.0.1:8091/model-info
+```
+
+Prediction check in PowerShell:
+
+```powershell
+$body = Get-Content models/production/example_request.json -Raw
+Invoke-RestMethod `
+  -Uri "http://127.0.0.1:8091/predict_uplift" `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+GCP build and deploy:
+
+```powershell
+$PROJECT_ID="causal-uplift-transformer"
+$REGION="us-central1"
+$REPO="causal-uplift"
+$SERVICE="causal-uplift-api"
+
+gcloud config set project $PROJECT_ID
+
+gcloud builds submit `
+  --tag "$REGION-docker.pkg.dev/$PROJECT_ID/$REPO/causal-uplift-api:latest" .
+
+gcloud run deploy $SERVICE `
+  --image "$REGION-docker.pkg.dev/$PROJECT_ID/$REPO/causal-uplift-api:latest" `
+  --region $REGION `
+  --platform managed `
+  --allow-unauthenticated `
+  --memory 2Gi `
+  --cpu 2 `
+  --min-instances 0 `
+  --max-instances 2 `
+  --port 8080
+
+$URL = gcloud run services describe $SERVICE --region $REGION --format "value(status.url)"
+curl "$URL/health"
+curl "$URL/model-info"
 ```
 
 Cloud Run deployment instructions are in `docs/gcp_deployment.md`.
@@ -287,9 +330,10 @@ the bundle locally before building a container.
 
 ```bash
 uv run python scripts/verify_environment.py
-uv run ruff check src tests
-uv run black --check src tests
-uv run pytest
+uv run ruff check src tests scripts
+uv run python -m black --check src tests scripts
+uv run python -m pytest
+uv run python scripts/check_production_bundle.py
 uv run python -m causal_uplift.data materialize --config configs/training.yaml
 uv run python -m causal_uplift.data profile --config configs/training.yaml
 uv run python -m causal_uplift.data materialize --config configs/training_full.yaml

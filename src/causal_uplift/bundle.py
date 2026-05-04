@@ -11,13 +11,10 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
-import torch
 
 from causal_uplift.baselines import UpliftPrediction
 from causal_uplift.config import AppConfig, TrainingConfig, load_training_config
-from causal_uplift.data import resolve_materialization_paths
 from causal_uplift.preprocessing import NumericFeaturePreprocessor
-from causal_uplift.transformer import FTTransformerUpliftModel, TorchUpliftTrainer
 
 PROJECT_NAME = "causal-uplift-transformer-beam"
 DEFAULT_BUNDLE_DIR = Path("models/production")
@@ -121,6 +118,8 @@ def resolve_source_model_path(
 
 
 def _feature_columns_from_train_split(training_config: TrainingConfig) -> tuple[list[str], Path]:
+    from causal_uplift.data import resolve_materialization_paths
+
     paths = resolve_materialization_paths(training_config)["processed_paths"]
     train_path: Path = paths["train"]
     if not train_path.exists():
@@ -140,6 +139,8 @@ def _feature_columns_from_train_split(training_config: TrainingConfig) -> tuple[
 
 
 def fit_preprocessor_for_bundle(training_config: TrainingConfig) -> NumericFeaturePreprocessor:
+    from causal_uplift.data import resolve_materialization_paths
+
     paths = resolve_materialization_paths(training_config)["processed_paths"]
     train_path: Path = paths["train"]
     feature_columns, _ = _feature_columns_from_train_split(training_config)
@@ -342,9 +343,18 @@ def build_inference_bundle(
     }
 
 
-def _load_transformer_bundle(
-    bundle_dir: Path, metadata: dict[str, Any], feature_count: int
-) -> TorchUpliftTrainer:
+def _load_transformer_bundle(bundle_dir: Path, metadata: dict[str, Any], feature_count: int) -> Any:
+    try:
+        torch = __import__("torch")
+        transformer_module = __import__("causal_uplift.transformer", fromlist=["placeholder"])
+        FTTransformerUpliftModel = transformer_module.FTTransformerUpliftModel
+        TorchUpliftTrainer = transformer_module.TorchUpliftTrainer
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "Torch dependencies are required to serve an ft_transformer champion. "
+            "Install training dependencies or deploy a non-transformer champion bundle."
+        ) from exc
+
     transformer_config = metadata.get("transformer", {})
     model = FTTransformerUpliftModel(
         num_features=feature_count + 1,

@@ -91,3 +91,45 @@ curl https://SERVICE_URL/model-info
 ```bash
 gcloud run services delete SERVICE --region REGION
 ```
+
+## Troubleshooting
+
+### Port Already Allocated Locally
+
+If `docker run` fails because a host port is already in use:
+
+```bash
+docker ps
+docker stop <container_id>
+```
+
+Or map a different host port:
+
+```bash
+docker run --rm -p 8091:8080 causal-uplift-api:local
+```
+
+### Cloud Run Degraded Or `model_loaded=false`
+
+Check that the production bundle files are present in the upload context:
+
+```bash
+gcloud meta list-files-for-upload | Select-String "models/production|champion_model|preprocessor"
+```
+
+Confirm heavy local artifacts are excluded:
+
+```bash
+gcloud meta list-files-for-upload | Select-String "data/|artifacts/data|mlflow.db|optuna_studies.db|parquet"
+```
+
+Then inspect Cloud Run logs for startup errors:
+
+```bash
+gcloud run services logs read SERVICE --region REGION --limit 100
+```
+
+### Slow Docker Build
+
+Production serving images should install only `requirements-serving.txt`.
+Do not run `uv sync` in the serving Docker image because it installs the full training stack.
