@@ -1,427 +1,474 @@
-# causal-uplift-transformer-beam
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB.svg)](https://www.python.org/downloads/release/python-3120/)
+[![uv](https://img.shields.io/badge/uv-package%20manager-5A45FF.svg)](https://github.com/astral-sh/uv)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.57+-FF4B4B.svg)](https://streamlit.io/)
+[![MLflow](https://img.shields.io/badge/MLflow-Tracking-0194E2.svg)](https://mlflow.org/)
+[![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED.svg)](https://www.docker.com/)
+[![Google Cloud Run](https://img.shields.io/badge/Google%20Cloud%20Run-Deployed-4285F4.svg)](https://cloud.google.com/run)
+[![CI](https://github.com/sundar139/Causal-Uplift-Transformer-Beam/actions/workflows/ci.yml/badge.svg)](https://github.com/sundar139/Causal-Uplift-Transformer-Beam/actions/workflows/ci.yml)
+[![Docker Workflow](https://github.com/sundar139/Causal-Uplift-Transformer-Beam/actions/workflows/docker.yml/badge.svg)](https://github.com/sundar139/Causal-Uplift-Transformer-Beam/actions/workflows/docker.yml)
+[![Status](https://img.shields.io/badge/status-production--ready-success.svg)](https://github.com/sundar139/Causal-Uplift-Transformer-Beam)
 
-A production-grade causal uplift repository with smoke and full training workflows, MLflow tracking, and FastAPI serving.
+# Causal Uplift Transformer Beam
 
-## What is included
+Production-grade causal uplift modeling system with full-dataset training, transformer challengers, MLflow experiment tracking, Optuna tuning, Cloud Run deployment, Streamlit dashboard, and GitHub Actions CI/CD.
 
-- Deterministic Criteo uplift loading and stratified train/validation/test splits
-- Baselines: two-model logistic, S-learner logistic, T-learner logistic
-- FT-Transformer style uplift model with PyTorch and early stopping
-- Unified training CLI for smoke and full runs
-- SQLite-backed MLflow tracking with per-model runs and exported artifacts
-- FastAPI inference API with deterministic fallback responses
-- Ruff, Black, and Pytest validation
+This repository predicts incremental treatment effect, not only conversion propensity. It benchmarks classical uplift baselines against FT-Transformer and causal FT-Transformer challengers, then deploys the empirically selected champion model by full-test Qini AUC. It includes reproducible configs, tracked experiment artifacts, production bundle contracts, Dockerized serving, a Streamlit client, and CI/CD workflows.
 
-## Setup
+## Executive Summary
 
-```bash
-uv sync --all-groups
+| Area | Implementation |
+|---|---|
+| Problem | Uplift modeling / treatment effect ranking |
+| Dataset | Criteo Uplift Prediction |
+| Training scale | Full: 13,979,592 rows (train 8,387,755, validation 2,795,918, test 2,795,919) |
+| Champion metric | Qini AUC |
+| Production champion | s_learner_logistic (from artifacts/reports/full/best_model_summary.json) |
+| Deployment | FastAPI + Docker + Google Cloud Run |
+| Dashboard | Streamlit |
+| Tracking | MLflow SQLite |
+| Tuning | Optuna |
+| CI/CD | GitHub Actions |
+
+## Why Uplift Modeling
+
+A standard classifier estimates conversion probability $P(Y=1 \mid X)$. Uplift modeling estimates incremental treatment effect and targets users only when treatment is expected to improve outcome.
+
+```math
+\tau(x) = \mu_1(x) - \mu_0(x)
 ```
 
-Optional environment file:
-
-```bash
-copy .env.example .env
+```math
+\mu_1(x) = P(Y=1 \mid X=x, T=1)
 ```
 
-## Verify environment
-
-```bash
-uv run python scripts/verify_environment.py
+```math
+\mu_0(x) = P(Y=1 \mid X=x, T=0)
 ```
 
-## Smoke training
+This reduces spend on users who would convert anyway and helps avoid targeting users with negative treatment effect.
 
-```bash
-uv run python -m causal_uplift.train smoke --sample-size 10000
-```
+## Dataset And Lineage
 
-Smoke outputs:
+- Dataset: Criteo Uplift Prediction
+- Source loader: scikit-uplift (`sklift.datasets.fetch_criteo`)
+- Target column: `conversion`
+- Treatment column: `treatment`
+- Features: `f0` through `f11` (12 features)
 
-- models/smoke_uplift_baseline.joblib
-- artifacts/smoke_metrics.json
+### Percent10 Mode (from artifacts/data/percent10/data_manifest.json)
 
-## Full training
+- Total rows: 1,397,960
+- Train: 978,572
+- Validation: 209,694
+- Test: 209,694
+- Treatment rate (train): 0.8500008175
+- Outcome rate (train): 0.0029164946
 
-```bash
-uv run python -m causal_uplift.train full --config configs/training.yaml
-```
+### Full Mode (from artifacts/data/full/data_manifest.json)
 
-Full training models:
+- Total rows: 13,979,592
+- Train: 8,387,755
+- Validation: 2,795,918
+- Test: 2,795,919
+- Treatment rate (train): 0.8500001490
+- Outcome rate (train): 0.0029167519
 
-- two_model_logistic
-- s_learner_logistic
-- t_learner_logistic
-- ft_transformer
+Raw and processed parquet files are intentionally git-ignored to keep repository size manageable and environment-independent. Lightweight lineage artifacts in `artifacts/data/` are tracked for reproducibility.
 
-Primary outputs:
-
-- mlflow.db
-- models/best_transformer_uplift.pt
-- artifacts/evaluation/percent10/full_training_metrics.json
-- artifacts/evaluation/percent10/test_predictions.csv
-
-## Optuna tuning
-
-Run Optuna after the percent10 and full dataset workflows are validated. That keeps tuning focused on improving known-good model paths instead of debugging data loading, splitting, or reporting while trials are running.
-
-Tune percent10:
-
-```bash
-uv run python -m causal_uplift.tuning --config configs/tuning.yaml
-uv run python -m causal_uplift.train full --config configs/training.yaml --use-best-params
-uv run python -m causal_uplift.train report --config configs/training.yaml
-```
-
-Tune full:
-
-```bash
-uv run python -m causal_uplift.tuning --config configs/tuning_full.yaml
-uv run python -m causal_uplift.train full --config configs/training_full.yaml --use-best-params
-uv run python -m causal_uplift.train report --config configs/training_full.yaml
-```
-
-Tuning artifacts:
-
-- artifacts/tuning/percent10/optuna_trials.csv
-- artifacts/tuning/percent10/best_params.json
-- artifacts/tuning/percent10/tuning_summary.json
-- artifacts/tuning/full/optuna_trials.csv
-- artifacts/tuning/full/best_params.json
-- artifacts/tuning/full/tuning_summary.json
-
-Optuna uses local SQLite storage by default at `optuna_studies.db`; MLflow remains SQLite-backed at `mlflow.db`.
-
-## Causal FT-Transformer Challenger
-
-The original FT-Transformer is an S-learner style model: treatment is appended as an input feature
-and the model learns one factual outcome surface. The causal FT-Transformer challenger uses a shared
-feature encoder with separate control and treatment heads, so it directly estimates `mu0(x)` and
-`mu1(x)`. It also supports a propensity head, group-balanced factual loss, positive-class weighting,
-Qini-based checkpointing, and multi-seed ensembling.
-
-Validate on percent10:
-
-```bash
-uv run python -m causal_uplift.train causal-ft --config configs/training_causal_ft.yaml
-uv run python -m causal_uplift.train report --config configs/training.yaml
-```
-
-Train the full challenger:
-
-```bash
-uv run python -m causal_uplift.train causal-ft --config configs/training_causal_ft_full.yaml
-uv run python -m causal_uplift.train report --config configs/training_full.yaml
-```
-
-Champion selection remains honest: models are ranked by `qini_auc`, with `policy_gain_top20` as the
-tie-breaker. If logistic still wins, deployment should keep the logistic champion and treat causal FT
-as a challenger. Deployment resumes only after the champion/challenger report supports the selected
-production model.
-
-Challenger outputs:
-
-- artifacts/evaluation/percent10/causal_ft_metrics.json
-- artifacts/evaluation/full/causal_ft_metrics.json
-- artifacts/evaluation/full/causal_ft_predictions.csv
-- artifacts/reports/full/champion_challenger_summary.json
-
-## Dataset modes
-
-This project supports two dataset modes with separate local parquet, profile, and evaluation paths:
-
-- `percent10` mode (`configs/training.yaml`) for fast iteration
-- `full` mode (`configs/training_full.yaml`) for final model training
-
-Dataset source for both modes:
-
-- Criteo Uplift Prediction via `sklift.datasets.fetch_criteo(...)`
-
-Materialize and profile `percent10` mode:
-
-```bash
-uv run python -m causal_uplift.data materialize --config configs/training.yaml
-uv run python -m causal_uplift.data profile --config configs/training.yaml
-```
-
-Materialize and profile `full` mode:
+Regenerate data locally:
 
 ```bash
 uv run python -m causal_uplift.data materialize --config configs/training_full.yaml
 uv run python -m causal_uplift.data profile --config configs/training_full.yaml
 ```
 
-Train and report `percent10` mode:
+## System Architecture
 
-```bash
-uv run python -m causal_uplift.train full --config configs/training.yaml
-uv run python -m causal_uplift.train report --config configs/training.yaml
+```mermaid
+flowchart TD
+    A[Criteo Uplift Dataset] --> B[Data Materialization]
+    B --> C[Data Profiling + Manifest]
+    C --> D[Training Workflows]
+    D --> E[Baselines]
+    D --> F[FT-Transformer]
+    D --> G[Causal FT-Transformer]
+    E --> H[MLflow Tracking]
+    F --> H
+    G --> H
+    H --> I[Reporting Artifacts]
+    I --> J[Champion Selection]
+    J --> K[Production Bundle]
+    K --> L[FastAPI Service]
+    L --> M[Docker Image]
+    M --> N[Google Cloud Run]
+    N --> O[Streamlit Dashboard]
+    P[GitHub Actions] --> Q[Quality + Docker Smoke + Manual Deploy]
 ```
 
-Train and report `full` mode:
+```text
+src/causal_uplift/       core package
+configs/                 reproducible training and tuning configs
+artifacts/               lightweight reports, metrics, and plots
+models/production/       production inference bundle
+app/                     Streamlit dashboard
+docs/                    data card and deployment docs
+.github/workflows/       CI, Docker validation, manual Cloud Run deploy
+```
+
+## Modeling Decisions And Formulas
+
+### A) Two-model logistic / T-learner
+
+```math
+\hat{\tau}(x) = \hat{\mu}_1(x) - \hat{\mu}_0(x)
+```
+
+- Separate outcome models for treated and control groups.
+- Clear treatment/control separation.
+- Can become unstable if one subgroup has weaker signal.
+
+### B) S-learner logistic
+
+```math
+\hat{\mu}(x,t) = P(Y=1 \mid X=x, T=t)
+```
+
+```math
+\hat{\tau}(x) = \hat{\mu}(x,1) - \hat{\mu}(x,0)
+```
+
+- Single model with treatment as a feature.
+- Stable on Criteo's compact numeric feature space.
+- Production champion by Qini AUC on the full test set.
+
+### C) FT-Transformer S-learner
+
+```math
+z = Transformer(Tokenize([x, t]))
+```
+
+```math
+\hat{y} = \sigma(Wz + b)
+```
+
+```math
+\hat{\tau}(x) = \hat{y}(x,1) - \hat{y}(x,0)
+```
+
+- Captures nonlinear interactions.
+- Useful challenger.
+- Not auto-deployed when Qini ranking does not win.
+
+### D) Causal FT-Transformer two-head challenger
+
+```math
+z = Transformer(Tokenize(x))
+```
+
+```math
+\hat{\mu}_0(x) = \sigma(h_0(z))
+```
+
+```math
+\hat{\mu}_1(x) = \sigma(h_1(z))
+```
+
+```math
+\hat{\tau}(x) = \hat{\mu}_1(x) - \hat{\mu}_0(x)
+```
+
+```math
+\mathcal{L}_{factual}
+=
+(1-T)\,BCE(Y,\hat{\mu}_0(X))
++
+T\,BCE(Y,\hat{\mu}_1(X))
+```
+
+```math
+\mathcal{L}_{propensity} = BCE(T,\hat{e}(X))
+```
+
+```math
+\mathcal{L}
+=
+\lambda_f \mathcal{L}_{factual}
++
+\lambda_p \mathcal{L}_{propensity}
++
+\lambda_b \mathcal{L}_{balance}
+```
+
+- Separate potential-outcome heads.
+- Group-balanced factual loss.
+- Positive-class weighting.
+- Qini-based checkpointing.
+- Multi-seed ensemble.
+- Final full-test Qini still trails deployed champion.
+
+## Metrics And Selection Policy
+
+- Primary metric: Qini AUC
+- Tie-breaker: policy_gain_top20
+- Treatment response AUC is reported, not used as champion selector.
+
+```math
+score_i = \hat{\tau}(x_i)
+```
+
+```math
+\pi_k(x_i)=1 \quad \text{if } score_i \text{ is in top } k\%
+```
+
+```math
+Gain@k =
+E[Y \mid T=1, \pi_k(X)=1]
+-
+E[Y \mid T=0, \pi_k(X)=1]
+```
+
+```math
+Champion =
+\arg\max_m
+\left(
+QiniAUC_m,\,
+PolicyGain@20_m
+\right)
+```
+
+## Experimentation Results
+
+### Before tuning
+
+The current repository does not preserve a separate immutable pre-tuning result file; latest available report artifacts are shown below.
+
+### After Optuna tuning
+
+#### Percent10 (artifacts/tuning/percent10/tuning_summary.json)
+
+- Trials requested: ft_transformer 20, s_learner_logistic 20
+- Trials completed: ft_transformer 40, s_learner_logistic 40
+- Best model family during tuning: ft_transformer
+- Best validation Qini AUC: 0.2114799669
+- Selected FT params: embedding_dim 64, num_layers 3, num_heads 2, dropout 0.1833492767, hidden_dim 128, learning_rate 0.0002031150, weight_decay 3.1552e-05, batch_size 1024
+- Selected S-learner params: C 0.0100020315, penalty l2, class_weight null, max_iter 500
+
+#### Full (artifacts/tuning/full/tuning_summary.json)
+
+- Trials requested: ft_transformer 8, s_learner_logistic 8
+- Trials completed: ft_transformer 8, s_learner_logistic 8
+- Best model family during tuning: ft_transformer
+- Best validation Qini AUC: 0.1845283425
+- Selected FT params: embedding_dim 96, num_layers 3, num_heads 8, dropout 0.1134470043, hidden_dim 256, learning_rate 0.0003109841, weight_decay 0.0001868764, batch_size 1024
+- Selected S-learner params: C 0.0105966315, penalty l2, class_weight null, max_iter 500
+
+### After causal FT-Transformer upgrade
+
+From artifacts/reports/full/model_ranking.csv and artifacts/reports/full/champion_challenger_summary.json.
+
+| Rank | Model | Qini AUC | Policy Gain@20 | Uplift AUC | Treatment Response AUC | Role |
+|---:|---|---:|---:|---:|---:|---|
+| 1 | s_learner_logistic | 0.1866207298 | 0.0049028178 | 0.0060406907 | 0.9502187140 | Production Champion |
+| 2 | two_model_logistic | 0.1812408794 | 0.0048195291 | 0.0058620426 | 0.9502282921 | Baseline |
+| 3 | t_learner_logistic | 0.1812408794 | 0.0048195291 | 0.0058620426 | 0.9502282921 | Baseline |
+| 4 | ft_transformer | 0.1809316597 | 0.0048313134 | 0.0058541582 | 0.9566008614 | Transformer Challenger |
+| 5 | ft_transformer_causal | 0.1383733762 | 0.0031845841 | 0.0044781112 | 0.9477893860 | Causal Transformer Challenger |
+| 6 | ft_transformer_causal_ensemble | 0.1283747707 | 0.0029497645 | 0.0041540635 | 0.9521401525 | Causal Transformer Challenger |
+
+Champion rationale:
+
+- Production champion is selected by Qini AUC on full test set, tie-broken by policy_gain_top20.
+- Current champion: s_learner_logistic.
+- Champion/challenger artifact states `transformer_won: false` with recommendation to keep non-transformer champion in production.
+
+This is explicit model governance: deployment follows measured uplift ranking, not model branding.
+
+## Production Deployment On Google Cloud Run
+
+Deployed API URL:
+
+- https://causal-uplift-api-sn6k6nocwq-uc.a.run.app
+
+Production bundle is built from the selected champion and includes:
+
+- champion_model.joblib
+- preprocessor.joblib
+- model_metadata.json
+- feature_schema.json
+- prediction_contract.json
+
+Serving endpoints:
+
+- /health
+- /model-info
+- /predict_uplift
+- /predict_batch
+
+Serving image design:
+
+- Slim Docker image for inference only.
+- Not a full training environment.
+- Cloud Run configured with min instances 0 and max instances 2 for cost control.
+
+Build commands:
+
+```bash
+uv run python scripts/build_inference_bundle.py --config configs/training_full.yaml
+uv run python scripts/check_production_bundle.py
+docker build -t causal-uplift-api:local .
+```
+
+## Issues Encountered And Resolutions
+
+| Issue | Root Cause | Resolution | Engineering Lesson |
+|---|---|---|---|
+| data/raw and data/processed empty | Dataset is fetched dynamically via scikit-uplift | Added materialization workflow, data manifest, and data card | Track lineage artifacts in Git; keep heavy parquet local |
+| Only 10% dataset used initially | Config used percent10 mode for iteration | Added full-data config and full materialization paths | Keep smoke and full-scale configs separate |
+| MLflow FileStore limitations | Local file backend warnings and weaker metadata ops | Standardized on SQLite-backed MLflow | Lightweight local tracking can still be robust with SQLite |
+| FT-Transformer did not consistently beat logistic | Response modeling quality is not identical to uplift ranking quality | Retained honest champion selection; transformer as challenger | Choose deployment by uplift objective, not architecture trend |
+| Causal FT still did not win | Added complexity did not improve final full-test Qini ranking | Kept as challenger and deployed empirical champion | Complexity must earn promotion via target metric |
+| Cloud Run model_loaded false | Model bundle files missing from build context | Fixed ignore rules and ensured production bundle inclusion | Deployment context hygiene is critical |
+| Cloud Build copied unnecessary payload | Docker/GCloud context included heavy local artifacts | Slim serving Dockerfile and explicit ignore files | Build context discipline speeds and stabilizes delivery |
+| Docker health check empty reply | Readiness timing race right after container start | Added readiness loop / delayed checks + logs inspection | Treat readiness as semantic health, not just port open |
+| Streamlit import issues | Direct-run module path differences | Added compatibility import fallback | Entry-point execution mode should be resilient |
+| Streamlit use_container_width deprecation | Streamlit API evolution | Replaced with width="stretch" | Keep UI dependencies current to avoid silent drift |
+
+## Why This Repository Is Industry-Standard
+
+- Reproducible config-driven workflows
+- Explicit data materialization and lineage manifests
+- Smoke validation before full-scale runs
+- Full-dataset training and evaluation path
+- MLflow experiment tracking
+- Optuna-based tuning for key model families
+- Champion/challenger governance
+- Honest metric-based champion promotion
+- Contracted production inference bundle
+- FastAPI serving contract for single and batch predictions
+- Slim Docker serving image
+- Cloud Run deployment path with cost controls
+- Streamlit operations dashboard/client
+- GitHub Actions quality + Docker smoke + manual deploy
+- Manual production deploy via Workload Identity Federation
+- Tests across data, model logic, API contract, app contract, and bundle contract
+- No raw dataset parquet committed
+
+## How To Run
+
+### Setup
+
+```bash
+uv sync --all-groups
+```
+
+### Smoke training
+
+```bash
+uv run python -m causal_uplift.train smoke --sample-size 10000
+```
+
+### Full data materialization
+
+```bash
+uv run python -m causal_uplift.data materialize --config configs/training_full.yaml
+uv run python -m causal_uplift.data profile --config configs/training_full.yaml
+```
+
+### Full training
 
 ```bash
 uv run python -m causal_uplift.train full --config configs/training_full.yaml
+```
+
+### Tuning
+
+```bash
+uv run python -m causal_uplift.tuning --config configs/tuning_full.yaml
+```
+
+### Causal FT challenger
+
+```bash
+uv run python -m causal_uplift.train causal-ft --config configs/training_causal_ft_full.yaml
+```
+
+### Reporting
+
+```bash
 uv run python -m causal_uplift.train report --config configs/training_full.yaml
 ```
 
-Why `data/raw` and `data/processed` are empty in Git:
-
-- The dataset is downloaded/materialized locally on demand.
-- Parquet files are git-ignored and must be regenerated locally.
-
-Ignored local data files:
-
-- data/raw/*.parquet
-- data/processed/**/*.parquet
-
-Tracked lightweight lineage artifacts:
-
-- artifacts/data/percent10/*.json
-- artifacts/data/percent10/*.csv
-- artifacts/data/full/*.json
-- artifacts/data/full/*.csv
-
-Row-count check:
-
-- Inspect `row_counts` in:
-  - `artifacts/data/percent10/data_manifest.json`
-  - `artifacts/data/full/data_manifest.json`
-- Full mode should have a larger total row count than percent10 mode.
-
-## Data card
-
-- docs/data_card.md
-
-## Reporting artifacts
-
-Generate consolidated report and plot artifacts from the latest full run:
-
-```bash
-uv run python -m causal_uplift.train report --config configs/training.yaml
-```
-
-Expected reporting outputs:
-
-- artifacts/reports/model_ranking.csv
-- artifacts/reports/model_ranking.json
-- artifacts/reports/best_model_summary.json
-- artifacts/reports/experiment_manifest.json
-- artifacts/plots/qini_curve.png
-- artifacts/plots/uplift_curve.png
-- artifacts/plots/policy_gain_curve.png
-
-Current model ranking (example):
-
-| model_name | qini_auc | policy_gain_top20 | uplift_auc | treatment_response_auc |
-| --- | ---: | ---: | ---: | ---: |
-| ft_transformer | 0.2140 | 0.0380 | 0.1820 | 0.6260 |
-| two_model_logistic | 0.1910 | 0.0320 | 0.1710 | 0.6150 |
-| t_learner_logistic | 0.1780 | 0.0290 | 0.1640 | 0.6090 |
-| s_learner_logistic | 0.1650 | 0.0240 | 0.1580 | 0.6030 |
-
-## MLflow UI
-
-```bash
-uv run python -m mlflow ui --backend-store-uri sqlite:///mlflow.db --port 5000
-```
-
-Open <http://127.0.0.1:5000>.
-
-## API
-
-Build the production inference bundle first. The bundle uses the champion selected in
-`artifacts/reports/full/best_model_summary.json`; it does not assume the transformer is the
-production model.
+### Build bundle
 
 ```bash
 uv run python scripts/build_inference_bundle.py --config configs/training_full.yaml
 uv run python scripts/check_production_bundle.py
 ```
 
-Run the service locally:
+### Run API
 
 ```bash
 uv run python -m uvicorn causal_uplift.serve:app --host 127.0.0.1 --port 8080
 ```
 
-Endpoints:
-
-- GET /
-- GET /health
-- GET /version
-- GET /model-info
-- POST /predict_uplift
-- POST /predict_batch
-
-Example request:
-
-```json
-{
-  "features": {
-    "f0": 0.1,
-    "f1": 0.2
-  }
-}
-```
-
-Health check:
-
-```bash
-curl http://127.0.0.1:8080/health
-curl http://127.0.0.1:8080/model-info
-```
-
-Slim serving Docker build and run:
-
-```bash
-docker build -t causal-uplift-api:local .
-docker run --rm -p 8091:8080 causal-uplift-api:local
-curl http://127.0.0.1:8091/health
-curl http://127.0.0.1:8091/model-info
-```
-
-Prediction check in PowerShell:
-
-```powershell
-$body = Get-Content models/production/example_request.json -Raw
-Invoke-RestMethod `
-  -Uri "http://127.0.0.1:8091/predict_uplift" `
-  -Method Post `
-  -ContentType "application/json" `
-  -Body $body
-```
-
-GCP build and deploy:
-
-```powershell
-$PROJECT_ID="causal-uplift-transformer"
-$REGION="us-central1"
-$REPO="causal-uplift"
-$SERVICE="causal-uplift-api"
-
-gcloud config set project $PROJECT_ID
-
-gcloud builds submit `
-  --tag "$REGION-docker.pkg.dev/$PROJECT_ID/$REPO/causal-uplift-api:latest" .
-
-gcloud run deploy $SERVICE `
-  --image "$REGION-docker.pkg.dev/$PROJECT_ID/$REPO/causal-uplift-api:latest" `
-  --region $REGION `
-  --platform managed `
-  --allow-unauthenticated `
-  --memory 2Gi `
-  --cpu 2 `
-  --min-instances 0 `
-  --max-instances 2 `
-  --port 8080
-
-$URL = gcloud run services describe $SERVICE --region $REGION --format "value(status.url)"
-curl "$URL/health"
-curl "$URL/model-info"
-```
-
-Cloud Run deployment instructions are in `docs/gcp_deployment.md`.
-
-Model binaries in `models/production` are ignored by default unless explicitly added. Regenerate
-the bundle locally before building a container.
-
-## Streamlit dashboard
-
-Run the dashboard locally:
-
-```bash
-uv run streamlit run app/streamlit_app.py
-```
-
-Set API URL in PowerShell (Cloud Run):
+### Run Streamlit dashboard
 
 ```powershell
 $env:CAUSAL_UPLIFT_API_URL="https://causal-uplift-api-sn6k6nocwq-uc.a.run.app"
 uv run streamlit run app/streamlit_app.py
 ```
 
-Dashboard capabilities:
+### Run CI checks locally
 
-- Overview with deployed champion model and key uplift metrics
-- Model performance section with ranking artifacts and policy gain charts when available
-- Single prediction interface for `f0` through `f11`
-- Batch prediction CSV upload with validation and downloadable predictions
-- About section documenting dataset, model families, and deployment architecture
+```bash
+uv run ruff check src tests scripts app
+uv run python -m black --check src tests scripts app
+uv run python -m pytest
+uv run python scripts/check_production_bundle.py
+```
 
-Batch CSV input format:
+## API Example
 
-- Required columns: `f0`, `f1`, `f2`, `f3`, `f4`, `f5`, `f6`, `f7`, `f8`, `f9`, `f10`, `f11`
-- Additional columns are ignored by the API client payload builder
+```json
+{
+  "features": {
+    "f0": 0.1,
+    "f1": 0.2,
+    "f2": 0.3,
+    "f3": 0.4,
+    "f4": 0.5,
+    "f5": 0.6,
+    "f6": 0.7,
+    "f7": 0.8,
+    "f8": 0.9,
+    "f9": 1.0,
+    "f10": 1.1,
+    "f11": 1.2
+  }
+}
+```
 
-Screenshot placeholder:
+## Dashboard
 
-- Add dashboard screenshots to `assets/` when available.
+The Streamlit app reads backend URL from `CAUSAL_UPLIFT_API_URL` and supports:
+
+- Overview and champion metrics
+- Single prediction
+- Batch CSV upload
+
+Sample batch input file:
+
+- examples/sample_batch.csv
 
 ## CI/CD
 
-GitHub Actions workflows in this repository:
+Workflows:
 
-- `ci.yml`: quality checks on push/PR to `main` plus manual dispatch
-- `docker.yml`: slim image build + container smoke test on push/PR to `main` plus manual dispatch
-- `cloud-run-deploy.yml`: manual-only Cloud Run deployment via workflow dispatch
+- .github/workflows/ci.yml
+- .github/workflows/docker.yml
+- .github/workflows/cloud-run-deploy.yml
 
-Required GitHub secrets for manual Cloud Run deployment:
+Deployment workflow is manual-only and uses Workload Identity Federation.
 
-- `GCP_PROJECT_ID`
-- `GCP_REGION`
-- `GCP_ARTIFACT_REPO`
-- `GCP_CLOUD_RUN_SERVICE`
-- `GCP_WORKLOAD_IDENTITY_PROVIDER`
-- `GCP_SERVICE_ACCOUNT`
-
-Why full training is not run in CI:
-
-- Full training, tuning, and reporting are compute-heavy and dataset-heavy workflows.
-- CI is scoped to fast, deterministic quality and serving-path validation.
-- This keeps pull request feedback quick and does not require live cloud credentials.
-
-Run the same CI checks locally:
-
-```bash
-uv sync --all-groups
-uv run ruff check src tests scripts app
-uv run python -m black --check src tests scripts app
-uv run python -m pytest
-uv run python scripts/check_production_bundle.py
-docker build -t causal-uplift-api:ci .
-docker run -d --name causal-uplift-api-ci -p 8092:8080 causal-uplift-api:ci
-Start-Sleep -Seconds 8
-docker logs causal-uplift-api-ci
-Invoke-RestMethod http://127.0.0.1:8092/health
-Invoke-RestMethod http://127.0.0.1:8092/model-info
-docker stop causal-uplift-api-ci
-docker rm causal-uplift-api-ci
-```
-
-If port `8092` is occupied, use another host port such as `8093`.
-If health checks fail, inspect `docker logs causal-uplift-api-ci` before removing the container.
-
-## Quality checks
-
-```bash
-uv run python scripts/verify_environment.py
-uv run ruff check src tests scripts app
-uv run python -m black --check src tests scripts app
-uv run python -m pytest
-uv run python scripts/check_production_bundle.py
-uv run python -m causal_uplift.data materialize --config configs/training.yaml
-uv run python -m causal_uplift.data profile --config configs/training.yaml
-uv run python -m causal_uplift.data materialize --config configs/training_full.yaml
-uv run python -m causal_uplift.data profile --config configs/training_full.yaml
-uv run python -m causal_uplift.train smoke --sample-size 10000
-uv run python -m causal_uplift.train full --config configs/training.yaml
-uv run python -m causal_uplift.tuning --config configs/tuning.yaml
-uv run python -m causal_uplift.train full --config configs/training.yaml --use-best-params
-uv run python -m causal_uplift.train report --config configs/training.yaml
-uv run python -m causal_uplift.train full --config configs/training_full.yaml
-uv run python -m causal_uplift.tuning --config configs/tuning_full.yaml
-uv run python -m causal_uplift.train full --config configs/training_full.yaml --use-best-params
-uv run python -m causal_uplift.train report --config configs/training_full.yaml
-uv run python scripts/build_inference_bundle.py --config configs/training_full.yaml
-```
+Full training is intentionally excluded from CI to keep feedback fast, deterministic, and credential-free for pull requests.
