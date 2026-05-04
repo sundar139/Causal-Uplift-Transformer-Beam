@@ -149,6 +149,21 @@ Or map a different host port:
 docker run --rm -p 8091:8080 causal-uplift-api:local
 ```
 
+Local Docker smoke sequence with readiness buffer:
+
+```bash
+docker run -d --name causal-uplift-api-ci -p 8092:8080 causal-uplift-api:ci
+Start-Sleep -Seconds 8
+docker logs causal-uplift-api-ci
+Invoke-RestMethod http://127.0.0.1:8092/health
+Invoke-RestMethod http://127.0.0.1:8092/model-info
+docker stop causal-uplift-api-ci
+docker rm causal-uplift-api-ci
+```
+
+If port `8092` is occupied, use `8093` (or another free host port).
+If health checks fail, inspect `docker logs causal-uplift-api-ci` before deleting the container.
+
 ### Cloud Run Degraded Or `model_loaded=false`
 
 Check that the production bundle files are present in the upload context:

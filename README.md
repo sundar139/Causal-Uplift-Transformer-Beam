@@ -391,11 +391,16 @@ uv run python -m pytest
 uv run python scripts/check_production_bundle.py
 docker build -t causal-uplift-api:ci .
 docker run -d --name causal-uplift-api-ci -p 8092:8080 causal-uplift-api:ci
-curl http://127.0.0.1:8092/health
-curl http://127.0.0.1:8092/model-info
+Start-Sleep -Seconds 8
+docker logs causal-uplift-api-ci
+Invoke-RestMethod http://127.0.0.1:8092/health
+Invoke-RestMethod http://127.0.0.1:8092/model-info
 docker stop causal-uplift-api-ci
 docker rm causal-uplift-api-ci
 ```
+
+If port `8092` is occupied, use another host port such as `8093`.
+If health checks fail, inspect `docker logs causal-uplift-api-ci` before removing the container.
 
 ## Quality checks
 
